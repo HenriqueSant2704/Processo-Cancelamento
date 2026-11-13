@@ -1,0 +1,19 @@
+{
+  "_observacao": "Etapas configuráveis. Por enquanto só as duas regras já conhecidas; o restante virá do cronograma oficial.",
+  "etapas": [
+    {
+      "id": "notificacao-atraso",
+      "nome": "Enviar notificação de atraso",
+      "gatilho": { "referencia": "bloqueio", "diasApos": 16 },
+      "acao": "Enviar notificação de atraso ao cliente",
+      "responsavel": "A definir"
+    },
+    {
+      "id": "proxima-etapa-pendente",
+      "nome": "Avançar após notificação sem resposta",
+      "gatilho": { "referencia": "etapaAnterior", "diasApos": 15 },
+      "acao": "A definir conforme cronograma oficial",
+      "responsavel": "A definir"
+    }
+  ]
+}

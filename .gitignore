@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente (credenciais do SGP etc.)
+.env
+.env.*
+!.env.example
+
+# Dados locais e logs (podem conter dados pessoais de clientes - LGPD)
+data/*
+!data/.gitkeep
+logs/
+*.log
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -137,7 +137,13 @@ function listaProcessos(processos, hoje, cronograma) {
 
 function detalheProcesso(processo, hoje, cronograma) {
   const nomes = Object.fromEntries(cronograma.etapas.map((e) => [e.id, e.nome]));
-  const v = visaoProcesso(processo, hoje, cronograma);
+  // Tarefas que podem criar ocorrência no SGP (botão "Criar no SGP").
+  const criaOcorrencia = (t) => {
+    const e = cronograma.etapas.find((x) => x.id === t.etapa);
+    return e && e.ocorrenciaSgp && e.ocorrenciaSgp.acao === t.descricao ? e.ocorrenciaSgp.tipo : null;
+  };
+  const v0 = visaoProcesso(processo, hoje, cronograma);
+  const v = { ...v0, paraHoje: v0.paraHoje.map((t) => ({ ...t, ocorrenciaTipo: criaOcorrencia(t) })) };
   // Na ficha, mostra só as fases e etapas do fluxo deste processo.
   const fluxo = obterFluxo(cronograma, v.fluxo);
   const doFluxo = (e) => fluxo.fases.includes(e.fase);

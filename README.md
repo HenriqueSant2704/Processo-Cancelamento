@@ -156,6 +156,11 @@ npm run cli -- sgp-diagnostico
 `pos-cancelamento` para cada contrato: 3 notificações em dias úteis alternados, "regularizou?" e o encerramento
 da ocorrência. O tipo é encontrado pelo nome (rota `GET /api/os/ocorrencia/tipo/list/`).
 
+**Criar ocorrência pelo sistema:** as tarefas "Abrir ocorrência de negativação/cancelamento no SGP" ganham o
+botão **Criar no SGP** (rota URA `Chamado – Criar`), que abre a ocorrência do tipo certo, guarda o número e conclui
+a tarefa. **Grava no SGP de verdade**, por isso só funciona com `SGP_CRIAR_OCORRENCIA=sim`. Opcionais:
+`SGP_USUARIO_OCORRENCIA`, `SGP_METODO_OCORRENCIA`, `SGP_ABRIR_OS`.
+
 Se o SGP não mandar a data da suspensão, o sistema anota o **primeiro dia em que viu** o contrato
 suspenso. Na prática o SGP não manda essa data, então o sistema usa o **vencimento da fatura em aberto
 mais antiga + 15 dias** (venceu dia 1, bloqueia dia 16, o processo começa dia 17), configurável em

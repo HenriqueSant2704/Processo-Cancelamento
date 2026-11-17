@@ -114,9 +114,10 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
   };
 }
 
-// opcoes: { repositorio, usuarios (null = sem login), cronograma, criarSgp(hoje), sincronizador, modoDemo, cookieSeguro, atrasDeProxy }
+// opcoes: { repositorio, usuarios (null = sem login), cronograma, criarSgp(hoje), sincronizador, modoDemo, cookieSeguro, atrasDeProxy,
+//           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado) }
 function criarApp(opcoes) {
-  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false } = opcoes;
+  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null } = opcoes;
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
     executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
@@ -128,6 +129,7 @@ function criarApp(opcoes) {
 
   return async function app(req, res) {
     const url = new URL(req.url, 'http://localhost');
+    let m;
     try {
       if (url.pathname === '/saude') return responderJson(res, 200, { ok: true });
 
@@ -163,7 +165,27 @@ function criarApp(opcoes) {
         return responderJson(res, 200, { ok: true }, { 'Set-Cookie': cookieSessao('', 0) });
       }
       if (req.method === 'GET' && url.pathname === '/api/eu') {
-        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null });
+        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null, criarOcorrencia: Boolean(criarOcorrenciaSgp) });
+      }
+      // Cria no SGP a ocorrência da tarefa "Abrir ocorrência ... no SGP" (GRAVA no SGP).
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/ocorrencia$/))) {
+        if (!criarOcorrenciaSgp) throw new ErroHttp(403, 'Criar ocorrência pelo sistema está desligado (SGP_CRIAR_OCORRENCIA).');
+        const corpo = await lerCorpo(req);
+        try {
+          const { processo, protocolo } = await servico.criarOcorrenciaDaTarefa({
+            repositorio,
+            cronograma,
+            tarefaId: m[1],
+            conteudo: typeof corpo.conteudo === 'string' ? corpo.conteudo.slice(0, 2000) : '',
+            por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
+            data: hojeISO(),
+            criar: criarOcorrenciaSgp,
+          });
+          return responderJson(res, 200, { protocolo, detalhe: visao.detalheProcesso(processo, hojeISO(), cronograma) });
+        } catch (erro) {
+          console.error(`Criar ocorrência (tarefa ${m[1]}): ${erro.message}`);
+          throw new ErroHttp(400, erro.message);
+        }
       }
       if (usuarios && req.method === 'POST' && url.pathname === '/api/senha') {
         const corpo = await lerCorpo(req);
@@ -179,7 +201,6 @@ function criarApp(opcoes) {
       const dataParam = url.searchParams.get('data');
       if (dataParam && !/^\d{4}-\d{2}-\d{2}$/.test(dataParam)) throw new ErroHttp(400, 'Data inválida.');
       const hoje = modoDemo && dataParam ? dataParam : hojeISO();
-      let m;
 
       if (req.method === 'GET' && url.pathname === '/api/painel') {
         return responderJson(res, 200, { ...visao.painel(await repositorio.listar(), hoje, cronograma), modoDemo, hojeReal: hojeISO() });

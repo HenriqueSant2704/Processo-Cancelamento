@@ -87,6 +87,40 @@ async function sincronizarTudo(args) {
   return resultado;
 }
 
+// Cria no SGP a ocorrência ligada a uma tarefa ("Abrir ocorrência ... no SGP") e marca a tarefa como feita.
+// criar: função que grava no SGP e devolve { protocolo, tipo }.
+async function criarOcorrenciaDaTarefa({ repositorio, cronograma, tarefaId, conteudo, por, data, criar }) {
+  const { obterEtapa } = require('../cronograma/motor');
+  const preparar = async () => {
+    const processo = await repositorio.obterPorTarefa(tarefaId);
+    if (!processo) throw new Error(`Tarefa ${tarefaId} não encontrada.`);
+    const tarefa = processo.tarefas.find((t) => t.id === tarefaId);
+    if (!tarefa || tarefa.status !== 'pendente') throw new Error('Essa tarefa não está pendente.');
+    const etapa = obterEtapa(cronograma, tarefa.etapa);
+    if (!etapa.ocorrenciaSgp || etapa.ocorrenciaSgp.acao !== tarefa.descricao) throw new Error('Essa tarefa não cria ocorrência no SGP.');
+    return { processo, etapa };
+  };
+  if (!por) throw new Error('Informe quem está criando a ocorrência.');
+  if (typeof conteudo !== 'string' || conteudo.trim().length < 5) throw new Error('Escreva o texto da ocorrência.');
+
+  const { processo, etapa } = await preparar();
+  const criada = await criar({ contrato: processo.cliente.contrato, tipoNome: etapa.ocorrenciaSgp.tipo, conteudo: conteudo.trim() });
+  const observacao = `Ocorrência ${criada.protocolo} (${criada.tipo}) criada no SGP pelo sistema.`;
+
+  // A ocorrência já existe no SGP: grava aqui; se outra pessoa mexeu no cliente ao mesmo tempo, tenta de novo.
+  for (let tentativa = 1; ; tentativa++) {
+    const atual = tentativa === 1 ? processo : (await preparar()).processo;
+    try {
+      concluirTarefa(atual, tarefaId, { por, data, observacao }, cronograma);
+      atual.ocorrencia = { numero: criada.protocolo };
+      await repositorio.salvarProcesso(atual);
+      return { processo: atual, protocolo: criada.protocolo };
+    } catch (erro) {
+      if (tentativa >= 3) throw new Error(`${observacao} Mas não consegui registrar aqui: ${erro.message} Marque a tarefa como feita manualmente.`);
+    }
+  }
+}
+
 async function agenda({ repositorio, hoje }) {
   return agendaDoDia(await repositorio.listar(), hoje);
 }
@@ -99,4 +133,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { sincronizar, sincronizarPosCancelamento, sincronizarTudo, agenda, concluir };
+module.exports = { sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

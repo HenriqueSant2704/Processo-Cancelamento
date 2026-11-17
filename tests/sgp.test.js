@@ -189,3 +189,20 @@ test('sincronização cria processos do fluxo pós-cancelamento sem duplicar', a
   assert.deepStrictEqual(p.tarefas.filter((t) => t.tipo === 'contato').map((t) => t.data), ['2026-11-17', '2026-11-19', '2026-11-23']);
   assert.strictEqual((await sincronizarTudo({ sgp, repositorio, cronograma, hoje: '2026-11-17' })).novos.length, 0);
 });
+
+test('criar ocorrência no SGP: usa o código do tipo, não abre OS e devolve o protocolo', async () => {
+  const { criarApiOcorrencias } = require('../src/integracoes/sgp/ocorrencias');
+  let enviado;
+  const buscarTipos = async () => ({ status: 200, texto: JSON.stringify([{ id: 36, codigo: 32, descricao: 'Financeiro - Negativação' }]) });
+  const buscar = async (url, op) => { enviado = { url, corpo: JSON.parse(op.body) }; return { ok: true, status: 200, json: async () => ({ status: 1, protocolo: '2611170001', msg: '' }) }; };
+  const oc = criarApiOcorrencias({ origem: 'https://sgp.teste', app: 'a', token: 't', buscar, buscarTipos });
+  const r = await oc.criarOcorrencia({ contrato: '1053', tipoNome: 'Financeiro - Negativação', conteudo: 'texto' });
+  assert.strictEqual(r.protocolo, '2611170001');
+  assert.strictEqual(enviado.url, 'https://sgp.teste/api/ura/chamado/');
+  assert.strictEqual(enviado.corpo.ocorrenciatipo, 32);
+  assert.strictEqual(enviado.corpo.contrato, 1053);
+  assert.strictEqual(enviado.corpo.desativa_os, 1);
+  // SGP recusando
+  const recusa = criarApiOcorrencias({ origem: 'https://sgp.teste', app: 'a', token: 't', buscarTipos, buscar: async () => ({ ok: true, status: 200, json: async () => ({ status: 0, msg: 'Contrato inválido' }) }) });
+  await assert.rejects(recusa.criarOcorrencia({ contrato: '1', tipoNome: 'Financeiro - Negativação', conteudo: 'x' }), /Contrato inválido/);
+});

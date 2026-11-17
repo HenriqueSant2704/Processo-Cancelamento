@@ -36,6 +36,11 @@ module.exports = {
     // Sincronização automática diária (só com SGP_MODO=api).
     sincronizacaoAutomatica: !/^(nao|não|false|0)$/i.test(process.env.SGP_SINCRONIZACAO_AUTOMATICA || 'sim'),
     horaSincronizacao: Number(process.env.SGP_HORA_SINCRONIZACAO || 7),
+    // Botão "Criar no SGP" (GRAVA no SGP). Desligado por padrão; ligar com SGP_CRIAR_OCORRENCIA=sim.
+    criarOcorrencia: /^(sim|true|1)$/i.test(process.env.SGP_CRIAR_OCORRENCIA || ''),
+    usuarioOcorrencia: (process.env.SGP_USUARIO_OCORRENCIA || '').trim(), // username do SGP que aparece como quem abriu
+    metodoOcorrencia: (process.env.SGP_METODO_OCORRENCIA || '').trim(), // código do método (ex.: 5 = WhatsApp)
+    abrirOsJunto: /^(sim|true|1)$/i.test(process.env.SGP_ABRIR_OS || ''),
   },
   carregarCronograma,
 };

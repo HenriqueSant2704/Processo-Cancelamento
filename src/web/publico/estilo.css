@@ -463,3 +463,8 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 @media (max-width: 900px) {
   .etapas-mesa { display: flex; flex-direction: column; }
 }
+
+/* Botão "Criar no SGP" */
+.botao.sgp { background: var(--acao-suave); color: var(--acao); }
+.botao.sgp:hover { border-color: var(--acao); }
+#ocorrencia-tipo { align-self: flex-start; }

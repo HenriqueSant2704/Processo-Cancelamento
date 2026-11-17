@@ -4,7 +4,8 @@
     "Tudo aqui é configurável: quantidade de tentativas, intervalos, prazos e textos.",
     "Intervalos em DiasUteis contam de segunda a sexta, pulando os feriados da lista (formato AAAA-MM-DD).",
     "Tipos de etapa: contatos (tentativas e depois a decisão), acao (tarefas; ao concluir todas vai para a proxima), aguardo (espera dias corridos e depois pergunta a decisão) e final (tarefas de encerramento).",
-    "Fluxos: \"principal\" começa pela suspensão no SGP; \"pos-cancelamento\" começa pelas ocorrências abertas do tipo \"Financeiro - Negativação pós Cancelamento\"."
+    "Fluxos: \"principal\" começa pela suspensão no SGP; \"pos-cancelamento\" começa pelas ocorrências abertas do tipo \"Financeiro - Negativação pós Cancelamento\".",
+    "ocorrenciaSgp: a ação indicada ganha o botão \"Criar no SGP\", que abre uma ocorrência do tipo informado (nome igual ao do SGP)."
   ],
   "feriados": [],
   "entrada": {
@@ -38,6 +39,10 @@
         "diasUteisAposUltimoContato": 1,
         "sim": "liberacao",
         "nao": "negativacao"
+      },
+      "ocorrenciaSgp": {
+        "acao": "Abrir ocorrência de negativação no SGP",
+        "tipo": "Financeiro - Negativação"
       }
     },
     {
@@ -102,6 +107,10 @@
         "diasUteisAposUltimoContato": 1,
         "sim": "retirada-negativacao",
         "nao": "cancelamento"
+      },
+      "ocorrenciaSgp": {
+        "acao": "Abrir ocorrência de cancelamento no SGP",
+        "tipo": "Financeiro - Cancelamento por Inadiplência"
       }
     },
     {

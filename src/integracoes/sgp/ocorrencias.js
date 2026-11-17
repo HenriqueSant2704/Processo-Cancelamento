@@ -80,7 +80,39 @@ function criarApiOcorrencias({ origem, app, token, buscar = fetch, buscarTipos =
     throw new ErroSgp('A leitura de ocorrências passou do limite de páginas.');
   }
 
-  return { listarTipos, idDoTipo, listarOcorrencias };
+  // ESCRITA: cria uma ocorrência (chamado) no SGP.  POST {origem}/api/ura/chamado/
+  // tipoNome: nome do tipo como está no SGP (ex.: "Financeiro - Negativação"); o código é buscado na lista de tipos.
+  async function criarOcorrencia({ contrato, tipoNome, conteudo, metodo, usuario, abrirOs = false }) {
+    if (!contrato) throw new ErroSgp('Contrato não informado.');
+    const tipos = await listarTipos();
+    const tipo = tipos.find((t) => normalizar(t.descricao) === normalizar(tipoNome));
+    if (!tipo) throw new ErroSgp(`Tipo de ocorrência "${tipoNome}" não encontrado no SGP.`);
+    const corpo = { app, token, contrato: Number(contrato), ocorrenciatipo: tipo.codigo, conteudo, conteudolimpo: 1 };
+    if (!abrirOs) corpo.desativa_os = 1;
+    if (metodo) corpo.metodo = Number(metodo);
+    if (usuario) { corpo.usuario = usuario; corpo.responsaveloc = usuario; }
+    let resposta;
+    try {
+      resposta = await buscar(`${origem}/api/ura/chamado/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(corpo),
+        signal: AbortSignal.timeout(tempoLimiteMs),
+      });
+    } catch {
+      throw new ErroSgp('Não foi possível conectar ao SGP para criar a ocorrência. Confira no SGP se ela foi criada antes de tentar de novo.');
+    }
+    if (resposta.status === 401 || resposta.status === 403) throw new ErroSgp(`O SGP não deixou criar a ocorrência (HTTP ${resposta.status}). O token precisa de permissão para isso.`);
+    let dados = null;
+    try { dados = await resposta.json(); } catch { /* sem corpo */ }
+    if (!resposta.ok || !ehObjeto(dados) || Number(dados.status) !== 1) {
+      const msg = ehObjeto(dados) && texto(dados.msg, 200);
+      throw new ErroSgp(`O SGP não criou a ocorrência${msg ? `: ${msg}` : ` (HTTP ${resposta.status})`}.`);
+    }
+    return { protocolo: texto(dados.protocolo, 40), tipo: tipo.descricao };
+  }
+
+  return { listarTipos, idDoTipo, listarOcorrencias, criarOcorrencia };
 }
 
 // Ocorrências ABERTAS (não encerradas) -> um item por contrato, ficando com a mais antiga.

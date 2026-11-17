@@ -35,7 +35,22 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log(`Sincronização automática com o SGP: todo dia a partir das ${config.sgp.horaSincronizacao}h.`);
   }
 
+  // Botão "Criar no SGP": no modo demonstração usa um SGP de mentira; no real, só com SGP_CRIAR_OCORRENCIA=sim.
+  let criarOcorrenciaSgp = null;
+  if (modoDemo) {
+    criarOcorrenciaSgp = async ({ tipoNome }) => ({ protocolo: `DEMO-${Date.now().toString().slice(-6)}`, tipo: tipoNome });
+  } else if (config.sgp.modo === 'api' && config.sgp.criarOcorrencia) {
+    const { criarApiOcorrencias } = require('../integracoes/sgp/ocorrencias');
+    const oc = criarApiOcorrencias({ origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token });
+    criarOcorrenciaSgp = ({ contrato, tipoNome, conteudo }) => oc.criarOcorrencia({
+      contrato, tipoNome, conteudo,
+      metodo: config.sgp.metodoOcorrencia, usuario: config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
+    });
+    console.log('Criar ocorrência no SGP pelo sistema: LIGADO.');
+  }
+
   const app = criarApp({
+    criarOcorrenciaSgp,
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
     cronograma,

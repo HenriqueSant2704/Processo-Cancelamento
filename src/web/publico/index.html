@@ -145,6 +145,24 @@
     </form>
   </dialog>
 
+  <!-- Criar ocorrência no SGP -->
+  <dialog class="janela" id="janela-ocorrencia">
+    <form method="dialog" id="form-ocorrencia">
+      <span class="sobretitulo" id="ocorrencia-cliente"></span>
+      <h3>Criar ocorrência no SGP</h3>
+      <div class="selo marca" id="ocorrencia-tipo"></div>
+      <label class="campo">
+        <span>Texto da ocorrência</span>
+        <textarea name="conteudo" rows="5" required minlength="5" maxlength="2000"></textarea>
+      </label>
+      <p class="efeito">A ocorrência é criada de verdade no SGP e o número dela fica guardado aqui. A tarefa é marcada como feita.</p>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="ocorrencia-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Criar no SGP</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Ajustar etapa -->
   <dialog class="janela" id="janela-ajuste">
     <form method="dialog" id="form-ajuste">

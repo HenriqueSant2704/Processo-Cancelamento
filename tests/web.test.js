@@ -88,3 +88,29 @@ test('agenda de um dia futuro e ajuste de etapa pela API', async (t) => {
   const ruim = await chamar(`/api/processos/${id}/ajustar${d}`, { por: 'Jessica', etapa: 'aguardo-negativado' });
   assert.strictEqual(ruim.status, 400);
 });
+
+test('botão Criar no SGP: desligado por padrão; ligado cria, guarda o número e conclui a tarefa', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  const desligado = subir(t, { repositorio, modoDemo: true });
+  let s = (await desligado.chamar('/api/sincronizar?data=2026-11-16', {})).json;
+  while (s.emAndamento) s = (await desligado.chamar('/api/sincronizacao')).json;
+  const painel = (await desligado.chamar('/api/painel?data=2026-11-16')).json;
+  const cliente = painel.clientes.find((c) => c.fluxo === 'principal');
+  const detalhe = (await desligado.chamar(`/api/processos/${cliente.id}?data=2026-11-16`)).json;
+  const tarefa = detalhe.paraHoje.find((x) => x.ocorrenciaTipo);
+  assert.strictEqual(tarefa.ocorrenciaTipo, 'Financeiro - Negativação');
+  assert.strictEqual((await desligado.chamar('/api/eu')).json.criarOcorrencia, false);
+  assert.strictEqual((await desligado.chamar(`/api/tarefas/${tarefa.id}/ocorrencia`, { por: 'Jessica', conteudo: 'texto ok' })).status, 403);
+
+  const pedidos = [];
+  const ligado = subir(t, { repositorio, modoDemo: true, criarOcorrenciaSgp: async (p) => { pedidos.push(p); return { protocolo: '777', tipo: p.tipoNome }; } });
+  const r = await ligado.chamar(`/api/tarefas/${tarefa.id}/ocorrencia`, { por: 'Jessica', conteudo: 'Cliente suspenso, abrindo negativação.' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.protocolo, '777');
+  assert.strictEqual(pedidos[0].contrato, cliente.cliente.contrato);
+  assert.strictEqual(r.json.detalhe.ocorrencia.numero, '777');
+  assert.strictEqual(r.json.detalhe.tarefas.find((x) => x.id === tarefa.id).status, 'concluida');
+  // Tarefa que não é de ocorrência é recusada
+  const outra = r.json.detalhe.paraHoje.find((x) => !x.ocorrenciaTipo);
+  assert.strictEqual((await ligado.chamar(`/api/tarefas/${outra.id}/ocorrencia`, { por: 'Jessica', conteudo: 'texto ok' })).status, 400);
+});

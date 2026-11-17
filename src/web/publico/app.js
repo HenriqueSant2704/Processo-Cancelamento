@@ -335,7 +335,9 @@
       ? el('div', { class: 'acoes-tarefa' },
           el('button', { class: 'botao sim', onclick: () => abrirDecisao(d, t, 'sim') }, ico('check'), 'Sim'),
           el('button', { class: 'botao nao', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'))
-      : el('div', { class: 'acoes-tarefa' }, el('button', { class: 'botao feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
+      : el('div', { class: 'acoes-tarefa' },
+          t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
+          el('button', { class: 'botao feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
     return el('div', { class: `tarefa ${t.tipo}${t.atrasada ? ' atrasada' : ''}`, 'data-tarefa': t.id },
       el('span', { class: 'icone', html: ICONES[t.tipo] }),
       el('div', { class: 'tarefa-texto' }, el('strong', {}, t.descricao), quando),
@@ -492,6 +494,37 @@
       });
       $('#janela-ajuste').close();
       avisar('Etapa ajustada e cronograma recalculado');
+      await aposAcao();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+// ---------- Criar ocorrência no SGP ----------
+  let ocorrenciaAtual = null;
+  function abrirOcorrencia(d, t) {
+    if (!garantirUsuario()) return;
+    ocorrenciaAtual = { d, t };
+    const f = $('#form-ocorrencia');
+    f.reset();
+    $('#ocorrencia-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#ocorrencia-tipo').textContent = t.ocorrenciaTipo;
+    const valor = d.financeiro && d.financeiro.valorAberto ? ` Valor em aberto: ${dinheiro(d.financeiro.valorAberto)} (${plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')}).` : '';
+    f.conteudo.value = `${t.ocorrenciaTipo}. Cliente suspenso há ${plural(d.diasBloqueado, 'dia', 'dias')} por inadimplência.${valor} Ocorrência aberta pelo sistema de cobrança (Têmis) por ${estado.usuario}.`;
+    $('#janela-ocorrencia').showModal();
+  }
+  async function enviarOcorrencia(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      const r = await api(`/api/tarefas/${ocorrenciaAtual.t.id}/ocorrencia`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, conteudo: f.conteudo.value }) });
+      $('#janela-ocorrencia').close();
+      avisar(`Ocorrência ${r.protocolo} criada no SGP`);
       await aposAcao();
     } catch (erro) {
       avisar(erro.message, 'erro');
@@ -746,6 +779,8 @@
     estado.selecionado = null;
     recarregar();
   });
+  $('#form-ocorrencia').addEventListener('submit', enviarOcorrencia);
+  $('#ocorrencia-cancelar').addEventListener('click', () => $('#janela-ocorrencia').close());
   $('#form-ajuste').addEventListener('submit', enviarAjuste);
   $('#form-ajuste').addEventListener('input', camposAjuste);
   $('#ajuste-cancelar').addEventListener('click', () => $('#janela-ajuste').close());
@@ -791,6 +826,7 @@
     try {
       const eu = await api('/api/eu');
       estado.comLogin = eu.comLogin;
+      estado.criarOcorrencia = Boolean(eu.criarOcorrencia);
       if (eu.comLogin) estado.usuario = eu.nome;
     } catch { /* segue sem login */ }
     desenharUsuario();

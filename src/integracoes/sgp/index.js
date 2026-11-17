@@ -3,8 +3,18 @@
 // SGP_MODO=exemplo usa dados fictícios; SGP_MODO=api usará a API real (a implementar).
 const { criarFonteExemplo } = require('./exemplo');
 
-function criarFonteSgp(config, hoje) {
-  if (config.sgp.modo === 'exemplo') return criarFonteExemplo(hoje);
+// bancoReal = true quando os dados vão para o Neon: aí não deixamos entrar cliente fictício.
+function criarFonteSgp(config, hoje, { bancoReal = false } = {}) {
+  if (config.sgp.modo === 'exemplo') {
+    if (bancoReal) {
+      return {
+        async listarClientesBloqueados() {
+          throw new Error('A integração com o SGP ainda não está pronta. Com o banco Neon, a sincronização com clientes fictícios fica desligada para não misturar dados de teste com os reais.');
+        },
+      };
+    }
+    return criarFonteExemplo(hoje);
+  }
   if (config.sgp.modo === 'api') {
     return {
       async listarClientesBloqueados() {

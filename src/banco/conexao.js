@@ -8,7 +8,10 @@ const path = require('node:path');
 
 function criarBancoPostgres(urlConexao) {
   const { Pool } = require('pg');
-  const pool = new Pool({ connectionString: urlConexao, max: 5, idleTimeoutMillis: 30_000 });
+  // O Neon entrega "sslmode=require"; deixamos explícita a verificação completa
+  // do certificado (o comportamento seguro que o pg já usa hoje), sem aviso no console.
+  const url = urlConexao.replace(/sslmode=(require|prefer|verify-ca)\b/, 'sslmode=verify-full');
+  const pool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 30_000 });
   return {
     query: (sql, params) => pool.query(sql, params),
     async transacao(fn) {

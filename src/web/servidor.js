@@ -23,7 +23,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
     cronograma: config.carregarCronograma(),
-    criarSgp: (hoje) => criarFonteSgp(config, hoje),
+    criarSgp: (hoje) => criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' }),
     modoDemo,
     cookieSeguro: producao,
     atrasDeProxy: producao,

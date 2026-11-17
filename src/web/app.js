@@ -188,7 +188,14 @@ function criarApp(opcoes) {
       }
       if (req.method === 'POST' && url.pathname === '/api/sincronizar') {
         await lerCorpo(req);
-        const { totalBloqueados, novos } = await servico.sincronizar({ sgp: criarSgp(hoje), repositorio, cronograma, hoje });
+        let resultado;
+        try {
+          resultado = await servico.sincronizar({ sgp: criarSgp(hoje), repositorio, cronograma, hoje });
+        } catch (erro) {
+          console.error(erro);
+          throw new ErroHttp(502, `Não foi possível sincronizar com o SGP. ${erro.message}`);
+        }
+        const { totalBloqueados, novos } = resultado;
         return responderJson(res, 200, { totalBloqueados, novos: novos.map((p) => ({ id: p.id, nome: p.cliente.nome })) });
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {

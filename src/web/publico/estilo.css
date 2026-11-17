@@ -155,7 +155,7 @@ button.metrica.ativa { border-color: var(--cor); box-shadow: 0 0 0 1px var(--cor
 .funil-titulo b { font: 600 12px var(--mono); color: var(--texto); }
 .funil-barra { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--superficie-3); gap: 2px; }
 .funil-barra i { display: block; height: 100%; min-width: 0; }
-.funil-legenda { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.funil-legenda { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; }
 .funil-item { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 4px 6px; border: 0; border-radius: 8px; background: none; text-align: left; color: var(--texto-3); }
 button.funil-item:hover { background: var(--superficie-3); }
 .funil-item span { display: flex; align-items: center; gap: 5px; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -166,7 +166,7 @@ button.funil-item:hover { background: var(--superficie-3); }
 
 /* cores das fases (1 a 6) */
 .f0 { background: #38bdf8; } .f1 { background: #818cf8; } .f2 { background: #a78bfa; }
-.f3 { background: #f59e0b; } .f4 { background: #fb7185; } .f5 { background: #94a3b8; }
+.f3 { background: #f59e0b; } .f4 { background: #fb7185; } .f5 { background: #94a3b8; } .f6 { background: #e879f9; }
 
 /* ---------- Mesa: fila + ficha ---------- */
 .mesa { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(330px, 400px) minmax(0, 1fr); gap: 16px; }

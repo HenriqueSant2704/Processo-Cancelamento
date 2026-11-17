@@ -11,6 +11,9 @@ function criarFonteExemplo(hoje) {
     async listarClientesBloqueados() {
       return clientes.map(({ diasBloqueado, ...c }) => ({ ...c, bloqueadoEm: adicionarDias(hoje, -diasBloqueado), financeiro: { valorAberto: 99.9, faturasAbertas: 1 } }));
     },
+    async listarPosCancelamento() {
+      return [{ contrato: 'C-9101', nome: 'Cliente Exemplo D (cancelado)', ocorrencia: { numero: '900001', abertaEm: adicionarDias(hoje, -5) } }];
+    },
   };
 }
 

@@ -20,15 +20,27 @@ function novaTarefa(processo, dados) {
   return tarefa;
 }
 
-function criarProcesso({ id, cliente, bloqueadoEm, inicio, cronograma }) {
+// Fluxo do processo: "principal" (suspensos) ou "pos-cancelamento".
+function obterFluxo(cronograma, id = 'principal') {
+  const fluxos = cronograma.fluxos || [{ id: 'principal', inicio: cronograma.inicio, fases: cronograma.fases }];
+  const fluxo = fluxos.find((f) => f.id === id);
+  if (!fluxo) throw new Error(`Fluxo "${id}" não existe no cronograma.`);
+  return fluxo;
+}
+
+// ocorrencia (opcional): { numero, abertaEm } da ocorrência do SGP que originou o processo.
+function criarProcesso({ id, cliente, bloqueadoEm, inicio, cronograma, fluxo = 'principal', ocorrencia = null }) {
+  const definicao = obterFluxo(cronograma, fluxo);
   const processo = {
     id: String(id),
+    fluxo: definicao.id,
     cliente,
     bloqueadoEm,
     iniciadoEm: inicio,
     status: 'ativo',
     resultado: null,
     etapaAtual: null,
+    ocorrencia,
     tarefas: [],
     historico: [],
   };
@@ -36,9 +48,11 @@ function criarProcesso({ id, cliente, bloqueadoEm, inicio, cronograma }) {
     data: inicio,
     por: 'sistema',
     evento: 'processo-iniciado',
-    detalhes: `Cliente bloqueado no SGP desde ${bloqueadoEm}.`,
+    detalhes: ocorrencia
+      ? `Ocorrência ${ocorrencia.numero} aberta no SGP em ${bloqueadoEm}.`
+      : `Cliente bloqueado no SGP desde ${bloqueadoEm}.`,
   });
-  iniciarEtapa(processo, cronograma.inicio, inicio, cronograma);
+  iniciarEtapa(processo, definicao.inicio, inicio, cronograma);
   return processo;
 }
 
@@ -210,4 +224,4 @@ function agendaDoDia(processos, hoje) {
   );
 }
 
-module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, agendaDoDia, obterEtapa };
+module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, agendaDoDia, obterEtapa, obterFluxo };

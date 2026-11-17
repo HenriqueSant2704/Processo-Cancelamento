@@ -7,10 +7,21 @@
 const { criarFonteExemplo } = require('./exemplo');
 const { criarApiSgp } = require('./api');
 const { contratosSuspensos } = require('./contratos');
+const { criarApiOcorrencias, abertasPorContrato } = require('./ocorrencias');
+
+// Nome do tipo de ocorrência que origina o fluxo pós-cancelamento ("Financeiro - Negativação pós Cancelamento").
+const TIPO_POS_CANCELAMENTO = /negativacao pos cancelamento/;
 
 function criarFonteApi(config, opcoesApi = {}) {
   const api = criarApiSgp({ url: config.sgp.uraClientesUrl, app: config.sgp.app, token: config.sgp.token, ...opcoesApi });
   return {
+    // Contratos com ocorrência ABERTA de negativação pós-cancelamento.
+    async listarPosCancelamento() {
+      const origem = new URL(config.sgp.uraClientesUrl).origin;
+      const oc = criarApiOcorrencias({ origem, app: config.sgp.app, token: config.sgp.token, ...(opcoesApi.ocorrencias || {}) });
+      const tipo = config.sgp.tipoPosCancelamento || (await oc.idDoTipo(TIPO_POS_CANCELAMENTO));
+      return abertasPorContrato(await oc.listarOcorrencias({ tipo: [tipo] }));
+    },
     async listarClientesBloqueados() {
       const { clientes } = await api.lerTodosClientes();
       return contratosSuspensos(clientes, {
@@ -27,11 +38,10 @@ function criarFonteApi(config, opcoesApi = {}) {
 function criarFonteSgp(config, hoje, { bancoReal = false } = {}) {
   if (config.sgp.modo === 'exemplo') {
     if (bancoReal) {
-      return {
-        async listarClientesBloqueados() {
-          throw new Error('O SGP está no modo "exemplo" (clientes fictícios). Com o banco Neon, use SGP_MODO=api para não misturar dados de teste com os reais.');
-        },
+      const erro = async () => {
+        throw new Error('O SGP está no modo "exemplo" (clientes fictícios). Com o banco Neon, use SGP_MODO=api para não misturar dados de teste com os reais.');
       };
+      return { listarClientesBloqueados: erro, listarPosCancelamento: erro };
     }
     return criarFonteExemplo(hoje);
   }

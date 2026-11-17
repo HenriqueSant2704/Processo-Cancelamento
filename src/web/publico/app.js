@@ -379,13 +379,14 @@
         el('span', { class: 'avatar grande' }, iniciais(d.cliente.nome)),
         el('div', { style: 'min-width:0;flex:1' },
           el('h2', {}, titulo(d.cliente.nome)),
-          el('div', { class: 'lc-meta' }, el('span', { class: 'mono' }, `Contrato #${d.cliente.contrato}`), '·', el('span', { class: 'mono' }, `Processo ${d.id}`))),
+          el('div', { class: 'lc-meta' }, el('span', { class: 'mono' }, `Contrato #${d.cliente.contrato}`), '·', el('span', { class: 'mono' }, `Processo ${d.id}`),
+            d.ocorrencia && d.ocorrencia.numero ? ['·', el('span', { class: 'mono', title: 'Ocorrência no SGP' }, `Ocorrência ${d.ocorrencia.numero}`)] : null)),
         situacao,
         fim ? null : el('button', { class: 'botao fantasma pequeno', title: 'Para clientes já tratados antes do sistema', onclick: () => abrirAjuste(d) }, 'Ajustar etapa')),
       el('div', { class: 'ficha-corpo' },
         el('div', { class: 'numeros quatro' },
           el('div', { class: `numero ${fim ? '' : nivelDias(d.diasBloqueado)}` },
-            el('small', {}, fim ? 'Finalizado em' : 'Suspenso há'),
+            el('small', {}, fim ? 'Finalizado em' : d.fluxo === 'pos-cancelamento' ? 'Ocorrência aberta há' : 'Suspenso há'),
             fim ? el('strong', {}, dataCurta(d.finalizadoEm)) : el('strong', {}, String(d.diasBloqueado), el('span', {}, d.diasBloqueado === 1 ? 'dia' : 'dias'))),
           el('div', { class: 'numero', title: d.financeiro ? `Atualizado em ${dataCurta(d.financeiro.em)}` : 'Ainda sem informação do SGP' },
             el('small', {}, 'Em aberto'),
@@ -547,7 +548,7 @@
     let texto = 'SGP · ainda não sincronizado hoje';
     if (s.emAndamento) texto = 'Lendo o SGP…';
     else if (u && !u.ok) texto = `Falhou: ${u.erro}`;
-    else if (u) texto = `SGP ${u.dia === hoje() ? 'hoje' : dataCurta(u.dia)} ${new Date(u.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ${u.total} suspensos`;
+    else if (u) texto = `SGP ${u.dia === hoje() ? 'hoje' : dataCurta(u.dia)} ${new Date(u.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ${u.total} suspensos${u.totalPosCancelamento ? ` · ${u.totalPosCancelamento} pós-cancelamento` : ''}`;
     $('#sync-texto').textContent = texto;
     $('#sync').title = texto;
   }

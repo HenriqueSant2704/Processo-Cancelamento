@@ -75,3 +75,8 @@ create table if not exists sgp_suspensoes (
 alter table processos add column if not exists valor_aberto numeric(12, 2);
 alter table processos add column if not exists faturas_abertas integer;
 alter table processos add column if not exists financeiro_em date;
+
+-- Fluxo do processo (principal = suspensos; pos-cancelamento = ocorrências de negativação pós-cancelamento)
+-- e a ocorrência do SGP que originou o processo.
+alter table processos add column if not exists fluxo text not null default 'principal';
+alter table processos add column if not exists ocorrencia_numero text;

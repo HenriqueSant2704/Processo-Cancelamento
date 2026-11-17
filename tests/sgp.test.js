@@ -151,3 +151,41 @@ test('sincronizador: uma rodada por vez, guarda o resultado e a agenda diária',
   assert.strictEqual(chamadas, 1);
   parar();
 });
+
+test('ocorrências: lê o tipo pelo nome e traz só as abertas, uma por contrato', async () => {
+  const { criarApiOcorrencias, abertasPorContrato } = require('../src/integracoes/sgp/ocorrencias');
+  const pedidos = [];
+  const buscarTipos = async () => ({ status: 200, texto: JSON.stringify([{ id: 36, codigo: 32, descricao: 'Financeiro - Negativação' }, { id: 66, codigo: 31, descricao: 'Financeiro - Negativação pós Cancelamento' }]) });
+  const buscar = async (url, op) => {
+    const corpo = JSON.parse(op.body);
+    pedidos.push(corpo);
+    const ocorrencias = [
+      { contrato: 10, cliente: 'A', numero: '111', status_id: 0, data_cadastro: '2026-11-01', comentarios: [] },
+      { contrato: 10, cliente: 'A', numero: '100', status_id: 3, data_cadastro: '2026-10-20' },
+      { contrato: 20, cliente: 'B', numero: '222', status_id: 1, data_cadastro: '2026-10-01' }, // encerrada
+    ];
+    return { ok: true, status: 200, json: async () => ({ paginacao: { total: ocorrencias.length }, ocorrencias }) };
+  };
+  const oc = criarApiOcorrencias({ origem: 'https://sgp.teste', app: 'a', token: 't', buscar, buscarTipos });
+  assert.strictEqual(await oc.idDoTipo(/negativacao pos cancelamento/), 66);
+  const lista = abertasPorContrato(await oc.listarOcorrencias({ tipo: [66] }));
+  assert.deepStrictEqual(pedidos[0].tipo, [66]);
+  assert.deepStrictEqual(lista, [{ contrato: '10', nome: 'A', ocorrencia: { numero: '100', abertaEm: '2026-10-20' } }]);
+});
+
+test('sincronização cria processos do fluxo pós-cancelamento sem duplicar', async () => {
+  const { sincronizarTudo } = require('../src/processos/servico');
+  const cronograma = carregarCronograma();
+  const repositorio = new RepositorioJson(null);
+  const sgp = {
+    listarClientesBloqueados: async () => [],
+    listarPosCancelamento: async () => [{ contrato: '77', nome: 'Cliente Cancelado', ocorrencia: { numero: '555', abertaEm: '2026-11-10' } }],
+  };
+  const r = await sincronizarTudo({ sgp, repositorio, cronograma, hoje: '2026-11-17' });
+  assert.strictEqual(r.totalPosCancelamento, 1);
+  const [p] = r.novos;
+  assert.strictEqual(p.fluxo, 'pos-cancelamento');
+  assert.strictEqual(p.etapaAtual, 'notificacao-pos-cancelamento');
+  assert.deepStrictEqual(p.tarefas.filter((t) => t.tipo === 'contato').map((t) => t.data), ['2026-11-17', '2026-11-19', '2026-11-23']);
+  assert.strictEqual((await sincronizarTudo({ sgp, repositorio, cronograma, hoje: '2026-11-17' })).novos.length, 0);
+});

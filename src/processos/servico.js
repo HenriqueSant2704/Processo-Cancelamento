@@ -37,6 +37,37 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
   return { totalBloqueados: bloqueados.length, novos };
 }
 
+// Abre um processo do fluxo "pos-cancelamento" para cada contrato com ocorrência
+// aberta de negativação pós-cancelamento no SGP (um por contrato).
+async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }) {
+  const lista = await sgp.listarPosCancelamento();
+  const novos = [];
+  for (const item of lista) {
+    const chave = `pos-${item.contrato}`;
+    if (await repositorio.processoAtivoDoCliente(chave)) continue;
+    const processo = criarProcesso({
+      id: await repositorio.proximoId(),
+      fluxo: 'pos-cancelamento',
+      cliente: { id: chave, nome: item.nome, contrato: item.contrato },
+      bloqueadoEm: item.ocorrencia.abertaEm || hoje,
+      ocorrencia: { numero: item.ocorrencia.numero },
+      inicio: hoje,
+      cronograma,
+    });
+    await repositorio.salvarProcesso(processo);
+    novos.push(processo);
+  }
+  return { totalPosCancelamento: lista.length, novos };
+}
+
+// Suspensos + pós-cancelamento numa rodada só.
+async function sincronizarTudo(args) {
+  const suspensos = await sincronizar(args);
+  if (typeof args.sgp.listarPosCancelamento !== 'function') return { ...suspensos, totalPosCancelamento: 0 };
+  const pos = await sincronizarPosCancelamento(args);
+  return { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
+}
+
 async function agenda({ repositorio, hoje }) {
   return agendaDoDia(await repositorio.listar(), hoje);
 }
@@ -49,4 +80,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { sincronizar, agenda, concluir };
+module.exports = { sincronizar, sincronizarPosCancelamento, sincronizarTudo, agenda, concluir };

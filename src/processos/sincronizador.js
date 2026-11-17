@@ -19,7 +19,7 @@ function criarSincronizador({ executar, hoje, timeZone = process.env.TZ || 'Amer
       const dia = diaEscolhido || hoje();
       try {
         const r = await executar(dia);
-        ultima = { dia, origem, inicio: iniciadaEm, fim: new Date().toISOString(), ok: true, total: r.totalBloqueados, novos: r.novos.map((p) => p.cliente.nome) };
+        ultima = { dia, origem, inicio: iniciadaEm, fim: new Date().toISOString(), ok: true, total: r.totalBloqueados, totalPosCancelamento: r.totalPosCancelamento || 0, novos: r.novos.map((p) => p.cliente.nome) };
       } catch (erro) {
         console.error(`Sincronização com o SGP falhou: ${erro.message}`);
         ultima = { dia, origem, inicio: iniciadaEm, fim: new Date().toISOString(), ok: false, erro: erro.message };

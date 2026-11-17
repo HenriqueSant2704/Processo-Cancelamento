@@ -1,7 +1,7 @@
 // Monta os dados já "mastigados" para a tela: o que fazer hoje, atrasados,
 // decisões pendentes, próximos dias e o resumo de cada cliente.
 const { diasEntre, adicionarDiasUteis } = require('../utils/datas');
-const { obterEtapa } = require('../cronograma/motor');
+const { obterEtapa, obterFluxo } = require('../cronograma/motor');
 
 const porData = (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id, undefined, { numeric: true });
 
@@ -45,6 +45,8 @@ function visaoProcesso(processo, hoje, cronograma) {
 
   return {
     id: processo.id,
+    fluxo: processo.fluxo || 'principal',
+    ocorrencia: processo.ocorrencia || null,
     cliente: processo.cliente,
     bloqueadoEm: processo.bloqueadoEm,
     diasBloqueado: diasEntre(processo.bloqueadoEm, hoje),
@@ -135,10 +137,15 @@ function listaProcessos(processos, hoje, cronograma) {
 
 function detalheProcesso(processo, hoje, cronograma) {
   const nomes = Object.fromEntries(cronograma.etapas.map((e) => [e.id, e.nome]));
+  const v = visaoProcesso(processo, hoje, cronograma);
+  // Na ficha, mostra só as fases e etapas do fluxo deste processo.
+  const fluxo = obterFluxo(cronograma, v.fluxo);
+  const doFluxo = (e) => fluxo.fases.includes(e.fase);
   return {
-    ...visaoProcesso(processo, hoje, cronograma),
-    fases: cronograma.fases,
-    etapasAjustaveis: cronograma.etapas.filter((e) => ['contatos', 'aguardo', 'acao'].includes(e.tipo)).map((e) => ({ id: e.id, nome: e.nome, tipo: e.tipo, tentativas: e.tentativas || 0 })),
+    ...v,
+    fases: fluxo.fases,
+    faseIndice: v.etapa ? fluxo.fases.indexOf(v.etapa.fase) : -1,
+    etapasAjustaveis: cronograma.etapas.filter((e) => doFluxo(e) && ['contatos', 'aguardo', 'acao'].includes(e.tipo)).map((e) => ({ id: e.id, nome: e.nome, tipo: e.tipo, tentativas: e.tentativas || 0 })),
     tarefas: [...processo.tarefas].sort(porData).map((t) => ({ ...t, etapaNome: nomes[t.etapa] || t.etapa })),
     historico: [...processo.historico].reverse(),
   };

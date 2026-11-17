@@ -5,7 +5,8 @@ const COLUNAS_PROCESSO = `
   id::text as id, cliente_id, cliente_nome, cliente_contrato,
   bloqueado_em::text as bloqueado_em, iniciado_em::text as iniciado_em,
   status, resultado, etapa_atual, finalizado_em::text as finalizado_em, versao,
-  valor_aberto::float8 as valor_aberto, faturas_abertas, financeiro_em::text as financeiro_em`;
+  valor_aberto::float8 as valor_aberto, faturas_abertas, financeiro_em::text as financeiro_em,
+  fluxo, ocorrencia_numero`;
 
 const COLUNAS_TAREFA = `
   id, processo_id::text as processo_id, etapa, tipo, descricao, data::text as data, status,
@@ -14,6 +15,8 @@ const COLUNAS_TAREFA = `
 function linhaParaProcesso(l) {
   return {
     id: l.id,
+    fluxo: l.fluxo || 'principal',
+    ocorrencia: l.ocorrencia_numero ? { numero: l.ocorrencia_numero } : null,
     cliente: { id: l.cliente_id, nome: l.cliente_nome, contrato: l.cliente_contrato },
     bloqueadoEm: l.bloqueado_em,
     iniciadoEm: l.iniciado_em,
@@ -110,11 +113,12 @@ class RepositorioPostgres {
     await this.banco.transacao(async (query) => {
       if (processo.versao === undefined) {
         await query(
-          `insert into processos (id, cliente_id, cliente_nome, cliente_contrato, bloqueado_em, iniciado_em, status, resultado, etapa_atual, finalizado_em, valor_aberto, faturas_abertas, financeiro_em)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          `insert into processos (id, cliente_id, cliente_nome, cliente_contrato, bloqueado_em, iniciado_em, status, resultado, etapa_atual, finalizado_em, valor_aberto, faturas_abertas, financeiro_em, fluxo, ocorrencia_numero)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [processo.id, processo.cliente.id, processo.cliente.nome, processo.cliente.contrato, processo.bloqueadoEm, processo.iniciadoEm,
             processo.status, processo.resultado, processo.etapaAtual, processo.finalizadoEm || null,
-            processo.financeiro?.valorAberto ?? null, processo.financeiro?.faturasAbertas ?? null, processo.financeiro?.em ?? null],
+            processo.financeiro?.valorAberto ?? null, processo.financeiro?.faturasAbertas ?? null, processo.financeiro?.em ?? null,
+            processo.fluxo || 'principal', processo.ocorrencia?.numero ?? null],
         );
         processo.versao = 1;
       } else {

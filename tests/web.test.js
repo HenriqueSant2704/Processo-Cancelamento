@@ -37,11 +37,11 @@ test('API da tela (modo demonstração, sem login): sincronizar, painel, conclui
   let status = disparo.json;
   while (status.emAndamento) status = (await chamar('/api/sincronizacao')).json;
   assert.strictEqual(status.ultima.ok, true);
-  assert.strictEqual(status.ultima.novos.length, 2);
+  assert.strictEqual(status.ultima.novos.length, 3); // 2 suspensos + 1 pós-cancelamento
 
   const painel = (await chamar('/api/painel' + d)).json;
-  assert.strictEqual(painel.resumo.clientesHoje, 2);
-  assert.strictEqual(painel.resumo.paraHoje, 4); // 2 clientes x (abrir ocorrência + 1º aviso)
+  assert.strictEqual(painel.resumo.clientesHoje, 3);
+  assert.strictEqual(painel.resumo.paraHoje, 5); // 2 suspensos x (abrir ocorrência + 1º aviso) + 1º aviso do pós-cancelamento
   assert.strictEqual(painel.proximosDias.length, 10);
 
   const tarefa = painel.clientes[0].paraHoje[0];
@@ -77,7 +77,7 @@ test('agenda de um dia futuro e ajuste de etapa pela API', async (t) => {
   while (s.emAndamento) s = (await chamar('/api/sincronizacao')).json;
 
   const agenda = (await chamar('/api/agenda' + d + '&dia=2026-11-18')).json;
-  assert.strictEqual(agenda.clientes.length, 2); // 2º aviso dos dois clientes cai na quarta
+  assert.strictEqual(agenda.clientes.length, 3); // 2º aviso dos três clientes cai na quarta
   assert.ok(agenda.clientes.every((c) => c.paraHoje.every((x) => x.data === '2026-11-18')));
   assert.strictEqual((await chamar('/api/agenda' + d)).status, 400);
 

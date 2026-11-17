@@ -119,7 +119,7 @@ function criarApp(opcoes) {
   const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false } = opcoes;
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
-    executar: (dia) => servico.sincronizar({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
+    executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
     hoje: hojeISO,
   });
   const ipDe = (req) => (atrasDeProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress;

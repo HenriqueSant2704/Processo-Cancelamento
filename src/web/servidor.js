@@ -25,7 +25,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   const cronograma = config.carregarCronograma();
   const criarSgp = (hoje) => criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' });
   const sincronizador = criarSincronizador({
-    executar: (dia) => servico.sincronizar({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia }),
+    executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia }),
     hoje: hojeISO,
     horaInicio: config.sgp.horaSincronizacao,
   });

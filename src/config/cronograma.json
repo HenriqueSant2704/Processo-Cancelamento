@@ -3,7 +3,8 @@
     "Cronograma do processo de cobrança e cancelamento por inadimplência.",
     "Tudo aqui é configurável: quantidade de tentativas, intervalos, prazos e textos.",
     "Intervalos em DiasUteis contam de segunda a sexta, pulando os feriados da lista (formato AAAA-MM-DD).",
-    "Tipos de etapa: contatos (tentativas e depois a decisão), acao (tarefas; ao concluir todas vai para a proxima), aguardo (espera dias corridos e depois pergunta a decisão) e final (tarefas de encerramento)."
+    "Tipos de etapa: contatos (tentativas e depois a decisão), acao (tarefas; ao concluir todas vai para a proxima), aguardo (espera dias corridos e depois pergunta a decisão) e final (tarefas de encerramento).",
+    "Fluxos: \"principal\" começa pela suspensão no SGP; \"pos-cancelamento\" começa pelas ocorrências abertas do tipo \"Financeiro - Negativação pós Cancelamento\"."
   ],
   "feriados": [],
   "entrada": {
@@ -17,7 +18,8 @@
     "Negativado",
     "Aviso de cancelamento",
     "Cancelamento",
-    "Equipamentos"
+    "Equipamentos",
+    "Pós-cancelamento"
   ],
   "etapas": [
     {
@@ -146,6 +148,66 @@
         "Classificar e finalizar o processo"
       ],
       "resultado": "cancelado"
+    },
+    {
+      "id": "notificacao-pos-cancelamento",
+      "nome": "Negativação pós-cancelamento",
+      "fase": "Pós-cancelamento",
+      "tipo": "contatos",
+      "acoes": [],
+      "mensagem": "Enviar notificação de negativação pós-cancelamento",
+      "tentativas": 3,
+      "intervaloDiasUteis": 2,
+      "decisao": {
+        "pergunta": "O cliente regularizou a dívida?",
+        "diasUteisAposUltimoContato": 1,
+        "sim": "regularizado-pos-cancelamento",
+        "nao": "encerramento-pos-cancelamento"
+      }
+    },
+    {
+      "id": "encerramento-pos-cancelamento",
+      "nome": "Encerramento pós-cancelamento",
+      "fase": "Pós-cancelamento",
+      "tipo": "final",
+      "acoes": [
+        "Encerrar a ocorrência no SGP"
+      ],
+      "resultado": "negativado"
+    },
+    {
+      "id": "regularizado-pos-cancelamento",
+      "nome": "Regularização pós-cancelamento",
+      "fase": "Pós-cancelamento",
+      "tipo": "final",
+      "acoes": [
+        "Retirar a negativação (ocorrência \"Financeiro - Anular Negativação\")",
+        "Encerrar a ocorrência no SGP"
+      ],
+      "resultado": "regularizado"
+    }
+  ],
+  "fluxos": [
+    {
+      "id": "principal",
+      "nome": "Inadimplência (suspensos)",
+      "inicio": "notificacao-negativacao",
+      "fases": [
+        "Notificação",
+        "Negativação",
+        "Negativado",
+        "Aviso de cancelamento",
+        "Cancelamento",
+        "Equipamentos"
+      ]
+    },
+    {
+      "id": "pos-cancelamento",
+      "nome": "Negativação pós-cancelamento",
+      "inicio": "notificacao-pos-cancelamento",
+      "fases": [
+        "Pós-cancelamento"
+      ]
     }
   ]
 }

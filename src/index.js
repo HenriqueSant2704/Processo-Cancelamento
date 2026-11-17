@@ -68,8 +68,8 @@ async function executar(comando, args, values, armazenamento) {
       return imprimirAgenda(await servico.agenda({ repositorio, hoje }), hoje);
     case 'sincronizar': {
       const sgp = criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' });
-      const { totalBloqueados, novos } = await servico.sincronizar({ sgp, repositorio, cronograma, hoje });
-      console.log(`SGP: ${totalBloqueados} cliente(s) bloqueado(s). ${novos.length} novo(s) processo(s) aberto(s).`);
+      const { totalBloqueados, totalPosCancelamento, novos } = await servico.sincronizarTudo({ sgp, repositorio, cronograma, hoje });
+      console.log(`SGP: ${totalBloqueados} suspenso(s), ${totalPosCancelamento} ocorrência(s) de pós-cancelamento. ${novos.length} novo(s) processo(s) aberto(s).`);
       for (const p of novos) console.log(`  processo ${p.id}: ${p.cliente.nome}`);
       return;
     }

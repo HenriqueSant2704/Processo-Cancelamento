@@ -10,7 +10,9 @@ function carregarCronograma() {
 
 module.exports = {
   ambiente: process.env.NODE_ENV || 'development',
+  arquivoDados: path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data'), 'processos.json'),
   sgp: {
+    modo: process.env.SGP_MODO || 'exemplo',
     baseUrl: process.env.SGP_BASE_URL || '',
     token: process.env.SGP_TOKEN || '',
     app: process.env.SGP_APP || '',

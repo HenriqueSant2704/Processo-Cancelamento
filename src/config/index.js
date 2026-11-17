@@ -9,6 +9,7 @@ function carregarCronograma() {
 }
 
 const ambiente = process.env.NODE_ENV || 'development';
+const lista = (texto) => texto.split(',').map((s) => s.trim()).filter(Boolean);
 
 module.exports = {
   ambiente,
@@ -21,9 +22,14 @@ module.exports = {
   },
   sgp: {
     modo: process.env.SGP_MODO || 'exemplo',
-    baseUrl: process.env.SGP_BASE_URL || '',
+    uraClientesUrl: process.env.SGP_URA_CLIENTES_URL || '',
     token: process.env.SGP_TOKEN || '',
     app: process.env.SGP_APP || '',
+    // Quais status do contrato contam como "suspenso" e quais motivos entram no processo.
+    statusSuspenso: lista(process.env.SGP_STATUS_SUSPENSO || 'SUSPENSO'),
+    motivos: lista(process.env.SGP_MOTIVOS_SUSPENSAO || ''),
+    // Campo do contrato com a data da suspensão (se o SGP mandar). Vazio = o sistema anota o 1º dia em que viu.
+    campoDataSuspensao: (process.env.SGP_CAMPO_DATA_SUSPENSAO || '').trim(),
   },
   carregarCronograma,
 };

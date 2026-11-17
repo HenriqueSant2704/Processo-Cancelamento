@@ -10,6 +10,8 @@
 //   npm run cli -- redefinir-senha <login>
 //   npm run cli -- desativar-usuario <login>
 //   npm run cli -- usuarios
+// SGP:
+//   npm run cli -- sgp-diagnostico   (mostra os campos que o SGP devolve, sem dados de clientes)
 // Opção --data AAAA-MM-DD simula outro dia (padrão: hoje).
 const { parseArgs } = require('node:util');
 const config = require('./config');
@@ -113,6 +115,24 @@ async function executar(comando, args, values, armazenamento) {
     case 'usuarios':
       for (const u of await exigirUsuarios(armazenamento).listar()) console.log(`  ${u.login.padEnd(20)} ${u.nome}${u.ativo ? '' : '  (desativado)'}`);
       return;
+    case 'sgp-diagnostico': {
+      // Mostra só a ESTRUTURA do que o SGP devolve (nomes de campos e contagens), sem dados de clientes.
+      const { criarApiSgp } = require('./integracoes/sgp/api');
+      const { diagnosticar } = require('./integracoes/sgp/contratos');
+      const api = criarApiSgp({ url: config.sgp.uraClientesUrl, app: config.sgp.app, token: config.sgp.token });
+      console.log('Lendo todos os clientes do SGP (pode levar alguns minutos)...');
+      const { clientes, paginas } = await api.lerTodosClientes();
+      const d = diagnosticar(clientes);
+      const linhas = (pares) => pares.map(([k, n]) => `    ${k} (${n})`).join('\n') || '    (nenhum)';
+      console.log(`\nPáginas: ${paginas} | Clientes: ${d.totalClientes}`);
+      console.log(`\nCampos do cliente:\n${linhas(d.camposCliente)}`);
+      console.log(`\nCampos do contrato:\n${linhas(d.camposContrato)}`);
+      console.log(`\nCampos do contrato que têm datas:\n${linhas(d.camposDoContratoComData)}`);
+      console.log(`\nCampos do serviço:\n${linhas(d.camposServico)}`);
+      console.log('\nContratos por status (e motivos):');
+      for (const s of d.status) console.log(`  ${s.status}: ${s.total}\n${linhas(s.motivos)}`);
+      return;
+    }
     case 'migrar':
       console.log(armazenamento.tipo === 'postgres' ? 'Banco Neon atualizado.' : 'Sem DATABASE_URL: nada a migrar (usando arquivo local).');
       return;

@@ -7,6 +7,12 @@ const { diasEntre } = require('../utils/datas');
 async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
   const bloqueados = await sgp.listarClientesBloqueados();
   const minimo = cronograma.entrada.diasBloqueadoMinimo;
+
+  // Sem data de suspensão vinda do SGP: usa o primeiro dia em que o sistema viu o contrato suspenso.
+  if (bloqueados.some((c) => !c.bloqueadoEm)) {
+    const vistos = await repositorio.registrarSuspensos(bloqueados.map((c) => String(c.id)), hoje, minimo);
+    for (const c of bloqueados) if (!c.bloqueadoEm) c.bloqueadoEm = vistos.get(String(c.id));
+  }
   const novos = [];
 
   for (const cliente of bloqueados) {

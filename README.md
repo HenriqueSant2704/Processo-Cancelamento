@@ -125,8 +125,32 @@ npm run cli -- decidir 1.5 sim --por Jessica --obs "Pagou via PIX"
 
 No PowerShell do Windows, use `npm.cmd` no lugar de `npm`.
 
-Por enquanto o SGP está em modo `exemplo` (clientes fictícios). A integração real
-com a API do SGP entra quando tivermos a documentação e as credenciais.
+## Integração com o SGP
+
+O sistema lê o SGP pela **rota URA de clientes** (a mesma usada no NeticoCam), só para consulta:
+`POST SGP_URA_CLIENTES_URL` com `{ app, token, offset, limit }`, de 100 em 100 clientes.
+Cada contrato com status **SUSPENSO** vira um processo (um cliente com dois contratos suspensos tem dois processos).
+
+Configuração no `.env` (ou no painel do Render):
+
+```
+SGP_MODO=api
+SGP_URA_CLIENTES_URL=...
+SGP_APP=...
+SGP_TOKEN=...
+SGP_MOTIVOS_SUSPENSAO=          # opcional: só estes motivos entram (ex.: FINANCEIRO)
+SGP_CAMPO_DATA_SUSPENSAO=       # opcional: campo com a data da suspensão, se o SGP mandar
+```
+
+Para ver o que o SGP devolve **sem expor dados de clientes** (só nomes de campos e contagens):
+
+```bash
+npm run cli -- sgp-diagnostico
+```
+
+Se o SGP não mandar a data da suspensão, o sistema anota o **primeiro dia em que viu** o contrato
+suspenso (por isso a sincronização deve rodar todo dia). Na primeira sincronização de todas, quem já
+estava suspenso entra direto no processo.
 
 ## Segurança e LGPD
 

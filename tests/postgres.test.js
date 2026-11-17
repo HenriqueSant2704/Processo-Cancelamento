@@ -117,3 +117,13 @@ test('login: usuário, senha, sessão e proteção da tela', async (t) => {
   await usuarios.desativar('jessica');
   assert.strictEqual(await usuarios.autenticar('jessica', 'nova-senha-123'), null);
 });
+
+test('Postgres: anota o 1º dia em que cada contrato foi visto suspenso', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  let vistos = await repo.registrarSuspensos(['11', '12'], '2026-11-16', 1);
+  assert.strictEqual(vistos.get('11'), '2026-11-15'); // 1ª vez: já conta como suspenso há 1 dia
+  vistos = await repo.registrarSuspensos(['11', '13'], '2026-11-17', 1);
+  assert.strictEqual(vistos.get('11'), '2026-11-15'); // mantém a data
+  assert.strictEqual(vistos.get('13'), '2026-11-17'); // novo conta a partir de hoje
+  assert.strictEqual(vistos.has('12'), false); // deixou de estar suspenso
+});

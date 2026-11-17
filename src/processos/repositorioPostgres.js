@@ -78,6 +78,26 @@ class RepositorioPostgres {
     return rows[0].id;
   }
 
+  // Anota o primeiro dia em que cada contrato apareceu suspenso no SGP e
+  // esquece os que deixaram de estar suspensos (se voltarem, contam de novo).
+  // Na primeíssima sincronização, quem já estava suspenso entra como suspenso
+  // há "diasPrimeiraVez" dias, para não esperar mais um dia para começar.
+  async registrarSuspensos(ids, hoje, diasPrimeiraVez) {
+    return this.banco.transacao(async (query) => {
+      const { rows } = await query('select ((select count(*) from sgp_suspensoes) + (select count(*) from processos))::int as n');
+      const dias = rows[0].n === 0 ? diasPrimeiraVez : 0;
+      await query('delete from sgp_suspensoes where not (contrato_id = any($1::text[]))', [ids]);
+      await query(
+        `insert into sgp_suspensoes (contrato_id, visto_desde)
+         select unnest($1::text[]), ($2::date - $3::int)
+         on conflict (contrato_id) do update set atualizado_em = now()`,
+        [ids, hoje, dias],
+      );
+      const r = await query('select contrato_id, visto_desde::text as visto_desde from sgp_suspensoes');
+      return new Map(r.rows.map((l) => [l.contrato_id, l.visto_desde]));
+    });
+  }
+
   // Grava o processo inteiro numa transação (tudo ou nada).
   async salvarProcesso(processo) {
     await this.banco.transacao(async (query) => {

@@ -4,7 +4,8 @@
 //   - RepositorioPostgres: banco Neon (uso real), em repositorioPostgres.js
 //
 // Métodos: listar(), obter(id), obterPorTarefa(tarefaId),
-//          processoAtivoDoCliente(clienteId), proximoId(), salvarProcesso(processo)
+//          processoAtivoDoCliente(clienteId), proximoId(), salvarProcesso(processo),
+//          registrarSuspensos(contratoIds, hoje, diasPrimeiraVez)
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -45,6 +46,18 @@ class RepositorioJson {
       else this.dados.processos.push(processo);
     }
     this.gravarArquivo();
+  }
+
+  // Ver explicação em repositorioPostgres.js (registrarSuspensos).
+  async registrarSuspensos(ids, hoje, diasPrimeiraVez) {
+    const { adicionarDias } = require('../utils/datas');
+    const atuais = this.dados.suspensoes || {};
+    const primeiraVez = Object.keys(atuais).length === 0 && this.dados.processos.length === 0;
+    const novos = {};
+    for (const id of ids) novos[id] = atuais[id] || (primeiraVez ? adicionarDias(hoje, -diasPrimeiraVez) : hoje);
+    this.dados.suspensoes = novos;
+    this.gravarArquivo();
+    return new Map(Object.entries(novos));
   }
 
   gravarArquivo() {

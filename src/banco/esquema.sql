@@ -62,3 +62,11 @@ create table if not exists sessoes (
   usuario_id bigint not null references usuarios (id) on delete cascade,
   expira_em  timestamptz not null
 );
+
+-- Primeiro dia em que o sistema viu cada contrato suspenso no SGP
+-- (usado quando o SGP não informa a data da suspensão).
+create table if not exists sgp_suspensoes (
+  contrato_id   text primary key,
+  visto_desde   date not null,
+  atualizado_em timestamptz not null default now()
+);

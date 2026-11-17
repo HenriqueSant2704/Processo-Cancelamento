@@ -439,3 +439,27 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 .lc-meta .pontos { margin-right: 2px; }
 .link-mini { border: 0; background: none; padding: 0; font: 600 11px Inter, sans-serif; letter-spacing: 0; text-transform: none; color: var(--marca-texto); }
 .link-mini:hover { text-decoration: underline; }
+
+/* ---------- Vista "Etapas" ---------- */
+.etapas-mesa { flex: 1; min-height: 0; display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; }
+.etapas-menu { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio); box-shadow: var(--sombra); scrollbar-width: thin; }
+.etapas-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; text-align: left; border-radius: 9px; color: var(--texto-2); }
+.etapas-menu button:hover { background: var(--superficie-3); color: var(--texto); }
+.etapas-menu button.ativo { background: var(--marca-suave); color: var(--marca-texto); box-shadow: 0 0 0 1px rgba(124, 108, 255, .35) inset; }
+.etapas-menu button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etapas-menu button b { font: 600 12px var(--mono); color: var(--texto); }
+.em-todas { padding: 10px 12px; font-weight: 600; }
+.em-etapa { border-top: 1px solid var(--linha); padding-top: 6px; }
+.em-titulo { padding: 8px 10px; font-weight: 600; font-size: 13px; }
+.em-titulo i { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+.em-passos { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 18px; padding-left: 8px; border-left: 1px solid var(--linha); }
+.em-passo { padding: 6px 10px; font-size: 12.5px; }
+.em-passo.vazio b, .em-etapa.vazia .em-titulo b, .em-etapa.vazia .em-titulo span { color: var(--texto-3); }
+.etapas-lista { min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.etapas-cabeca { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.etapas-cabeca h2 { font-size: 18px; }
+.etapas-total { font: 600 12.5px var(--mono); color: var(--texto-2); }
+.texto-perigo { color: var(--perigo); font-size: 12px; }
+@media (max-width: 900px) {
+  .etapas-mesa { display: flex; flex-direction: column; }
+}

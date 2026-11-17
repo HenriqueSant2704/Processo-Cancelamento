@@ -210,7 +210,7 @@ function criarApp(opcoes) {
         return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
       }
       if (req.method === 'GET' && url.pathname === '/api/processos') {
-        return responderJson(res, 200, { hoje, fases: cronograma.fases, processos: visao.listaProcessos(await repositorio.listar(), hoje, cronograma) });
+        return responderJson(res, 200, { hoje, fases: cronograma.fases, etapas: visao.mapaEtapas(cronograma), processos: visao.listaProcessos(await repositorio.listar(), hoje, cronograma) });
       }
       if (req.method === 'GET' && (m = url.pathname.match(/^\/api\/processos\/(\d+)$/))) {
         const processo = await repositorio.obter(m[1]);

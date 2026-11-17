@@ -5,6 +5,39 @@ const { obterEtapa } = require('../cronograma/motor');
 
 const porData = (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id, undefined, { numeric: true });
 
+// Passos de cada etapa, para a tela "Etapas" (ex.: "2ª mensagem", "Regularizou?").
+function passosDaEtapa(etapa) {
+  if (etapa.tipo === 'contatos') {
+    return [...Array.from({ length: etapa.tentativas }, (_, i) => ({ id: `msg-${i + 1}`, nome: `${i + 1}ª mensagem` })), { id: 'decisao', nome: 'Regularizou?' }];
+  }
+  if (etapa.tipo === 'aguardo') return [{ id: 'espera', nome: 'Em espera' }, { id: 'decisao', nome: 'Regularizou?' }];
+  return [{ id: 'acoes', nome: 'Ações no SGP' }];
+}
+
+function mapaEtapas(cronograma) {
+  return cronograma.etapas
+    .filter((e) => e.tipo !== 'final')
+    .map((e) => ({ id: e.id, nome: e.nome, fase: e.fase, faseIndice: cronograma.fases.indexOf(e.fase), passos: passosDaEtapa(e) }));
+}
+
+// Em que passo da etapa atual o processo está.
+function passoAtual(processo, etapa, hoje) {
+  if (!etapa) return null;
+  const daEtapa = processo.tarefas.filter((t) => t.etapa === etapa.id && t.status !== 'cancelada');
+  const passos = passosDaEtapa(etapa);
+  const pega = (id) => passos.find((p) => p.id === id);
+  if (etapa.tipo === 'contatos') {
+    const contatos = daEtapa.filter((t) => t.tipo === 'contato');
+    const proximo = contatos.findIndex((t) => t.status === 'pendente');
+    return proximo >= 0 ? pega(`msg-${proximo + 1}`) : pega('decisao');
+  }
+  if (etapa.tipo === 'aguardo') {
+    const decisao = daEtapa.find((t) => t.tipo === 'decisao' && t.status === 'pendente');
+    return decisao && decisao.data <= hoje ? pega('decisao') : { ...pega('espera'), ate: decisao ? decisao.data : null };
+  }
+  return pega('acoes');
+}
+
 function visaoProcesso(processo, hoje, cronograma) {
   const etapa = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
   const pendentes = processo.tarefas.filter((t) => t.status === 'pendente').sort(porData);
@@ -22,6 +55,7 @@ function visaoProcesso(processo, hoje, cronograma) {
     financeiro: processo.financeiro || null,
     etapa: etapa ? { id: etapa.id, nome: etapa.nome, fase: etapa.fase, tipo: etapa.tipo } : null,
     faseIndice: etapa ? cronograma.fases.indexOf(etapa.fase) : -1,
+    passo: passoAtual(processo, etapa, hoje),
     contatos: {
       feitos: contatos.filter((t) => t.status === 'concluida').length,
       total: contatos.filter((t) => t.status !== 'cancelada').length,
@@ -110,4 +144,4 @@ function detalheProcesso(processo, hoje, cronograma) {
   };
 }
 
-module.exports = { painel, agendaDoDia, listaProcessos, detalheProcesso, visaoProcesso };
+module.exports = { mapaEtapas, painel, agendaDoDia, listaProcessos, detalheProcesso, visaoProcesso };

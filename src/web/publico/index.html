@@ -19,6 +19,9 @@
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
         <span class="trilho-badge" id="badge-hoje"></span>
       </button>
+      <button class="trilho-item" data-vista="etapas" title="Clientes por etapa" aria-label="Clientes por etapa">
+        <svg viewBox="0 0 24 24"><path d="M3 5h4v14H3zM10 5h4v9h-4zM17 5h4v5h-4z"/></svg>
+      </button>
       <button class="trilho-item" data-vista="clientes" title="Todos os clientes" aria-label="Todos os clientes">
         <svg viewBox="0 0 24 24"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7"/></svg>
       </button>
@@ -76,6 +79,30 @@
           </section>
 
           <section class="ficha" id="ficha" aria-live="polite"></section>
+        </div>
+      </section>
+
+      <!-- Vista: clientes por etapa e passo -->
+      <section id="vista-etapas" class="vista" hidden>
+        <div class="etapas-mesa">
+          <nav class="etapas-menu" id="etapas-menu" aria-label="Etapas e passos"></nav>
+          <section class="etapas-lista">
+            <div class="etapas-cabeca">
+              <div>
+                <span class="sobretitulo" id="etapas-caminho">Todas as etapas</span>
+                <h2 id="etapas-titulo">Clientes em andamento</h2>
+              </div>
+              <span class="etapas-total" id="etapas-total"></span>
+            </div>
+            <div class="tabela-wrap">
+              <table class="tabela">
+                <thead>
+                  <tr><th>Cliente</th><th>Suspenso há</th><th>Etapa · passo</th><th>Próxima ação</th><th>Em aberto</th></tr>
+                </thead>
+                <tbody id="tabela-etapas"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
 

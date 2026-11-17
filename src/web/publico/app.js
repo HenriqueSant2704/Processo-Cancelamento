@@ -11,6 +11,8 @@
     busca: '',
     abaClientes: 'ativos',
     faseClientes: null,
+    filtroEtapa: null, // { etapa, passo } na tela Etapas (null = todas)
+    etapas: null, // mapa de etapas e passos (vem do servidor)
     painel: null,
     processos: null,
     selecionado: null, // id do processo aberto na ficha
@@ -118,14 +120,16 @@
     desenharHoje();
   }
   async function carregarClientes() {
-    estado.processos = (await api('/api/processos')).processos;
-    desenharClientes();
+    const r = await api('/api/processos');
+    estado.processos = r.processos;
+    estado.etapas = r.etapas;
+    if (estado.vista === 'etapas') desenharEtapas(); else desenharClientes();
   }
   async function recarregar() {
     try {
       if (estado.dia) estado.agenda = (await api(`/api/agenda?dia=${estado.dia}`)).clientes;
       await carregarPainel();
-      if (estado.vista === 'clientes') await carregarClientes();
+      if (estado.vista === 'clientes' || estado.vista === 'etapas') await carregarClientes();
     } catch (erro) {
       avisar(erro.message, 'erro');
     }
@@ -136,7 +140,7 @@
     const p = estado.painel;
     $('#data-extenso').textContent = dataExtenso(p.hoje) + (p.hoje !== p.hojeReal ? ' · dia simulado' : '');
     const nome = estado.usuario ? estado.usuario.split(' ')[0] : '';
-    $('#saudacao').textContent = estado.vista === 'clientes' ? 'Todos os clientes' : `${saudacao()}${nome ? `, ${nome}` : ''}`;
+    $('#saudacao').textContent = estado.vista === 'clientes' ? 'Todos os clientes' : estado.vista === 'etapas' ? 'Clientes por etapa' : `${saudacao()}${nome ? `, ${nome}` : ''}`;
     $('#simular').hidden = !p.modoDemo;
     if (p.modoDemo && !$('#campo-data').value) $('#campo-data').value = p.hoje;
     const total = p.resumo.paraHoje + p.resumo.atrasadas;
@@ -614,6 +618,60 @@
   }
 
   // Na lista de clientes, a ficha abre por cima (como no celular).
+  // ---------- Vista "Etapas": clientes por etapa e passo ----------
+  function desenharEtapas() {
+    const ativos = (estado.processos || []).filter((c) => c.status === 'ativo');
+    const termo = normalizar(estado.busca);
+    const conta = (etapaId, passoId) => ativos.filter((c) => c.etapa && c.etapa.id === etapaId && (!passoId || (c.passo && c.passo.id === passoId))).length;
+    const f = estado.filtroEtapa;
+    const escolher = (etapa, passo) => { estado.filtroEtapa = etapa ? { etapa, passo } : null; desenharEtapas(); };
+
+    // Menu à esquerda: cada etapa com seus passos e quantos clientes há em cada um.
+    $('#etapas-menu').replaceChildren(
+      el('button', { class: `em-todas${!f ? ' ativo' : ''}`, onclick: () => escolher(null) }, el('span', {}, 'Todas as etapas'), el('b', {}, String(ativos.length))),
+      ...(estado.etapas || []).map((e) => {
+        const total = conta(e.id);
+        return el('div', { class: `em-etapa${total ? '' : ' vazia'}` },
+          el('button', { class: `em-titulo${f && f.etapa === e.id && !f.passo ? ' ativo' : ''}`, onclick: () => escolher(e.id, null) },
+            el('i', { class: `f${e.faseIndice}` }), el('span', {}, e.nome), el('b', {}, String(total))),
+          e.passos.length > 1 ? el('div', { class: 'em-passos' }, e.passos.map((p) => {
+            const n = conta(e.id, p.id);
+            return el('button', { class: `em-passo${f && f.etapa === e.id && f.passo === p.id ? ' ativo' : ''}${n ? '' : ' vazio'}`, onclick: () => escolher(e.id, p.id) },
+              el('span', {}, p.nome), el('b', {}, String(n)));
+          })) : null);
+      }));
+
+    const etapaSel = f && (estado.etapas || []).find((e) => e.id === f.etapa);
+    const passoSel = etapaSel && f.passo && etapaSel.passos.find((p) => p.id === f.passo);
+    $('#etapas-caminho').textContent = etapaSel ? etapaSel.fase : 'Todas as etapas';
+    $('#etapas-titulo').textContent = etapaSel ? `${etapaSel.nome}${passoSel ? ` · ${passoSel.nome}` : ''}` : 'Clientes em andamento';
+
+    const lista = ativos
+      .filter((c) => !f || (c.etapa && c.etapa.id === f.etapa && (!f.passo || (c.passo && c.passo.id === f.passo))))
+      .filter((c) => !termo || normalizar(`${c.cliente.nome} ${c.cliente.contrato}`).includes(termo))
+      .sort((a, b) => b.diasBloqueado - a.diasBloqueado);
+    const soma = lista.reduce((s, c) => s + ((c.financeiro && c.financeiro.valorAberto) || 0), 0);
+    $('#etapas-total').textContent = `${plural(lista.length, 'cliente', 'clientes')}${soma ? ` · ${dinheiro(soma)} em aberto` : ''}`;
+
+    if (!lista.length) {
+      $('#tabela-etapas').replaceChildren(el('tr', {}, el('td', { colspan: '5', class: 'suave' }, 'Nenhum cliente neste passo.')));
+      return;
+    }
+    $('#tabela-etapas').replaceChildren(...lista.map((c) => {
+      const prox = c.paraHoje[0] || c.proxima;
+      const atrasada = c.paraHoje.some((t) => t.atrasada);
+      return el('tr', { tabindex: '0', onclick: () => abrirDaTabela(c.id), onkeydown: (e) => { if (e.key === 'Enter') abrirDaTabela(c.id); } },
+        el('td', {}, el('div', { class: 'cliente-celula' }, el('span', { class: 'avatar' }, iniciais(c.cliente.nome)),
+          el('div', {}, el('strong', {}, titulo(c.cliente.nome)), el('div', { class: 'suave mono' }, `#${c.cliente.contrato}`)))),
+        el('td', {}, chipDias(c.diasBloqueado)),
+        el('td', {}, el('div', {}, c.etapa.nome), el('div', { class: 'suave' }, c.passo ? `${c.passo.nome}${c.passo.ate ? ` · até ${dataCurta(c.passo.ate)}` : ''}` : '')),
+        el('td', {}, prox
+          ? el('div', {}, el('div', {}, prox.descricao), el('div', { class: `mono ${atrasada ? 'texto-perigo' : 'suave'}` }, `${atrasada ? 'Atrasada · ' : ''}${prox.data === hoje() ? 'Hoje' : dataCurta(prox.data)}`))
+          : el('span', { class: 'suave' }, '—')),
+        el('td', { class: 'mono' }, c.financeiro && c.financeiro.valorAberto ? dinheiro(c.financeiro.valorAberto) : el('span', { class: 'suave' }, '—')));
+    }));
+  }
+
   function abrirDaTabela(id) {
     trocarVista('hoje');
     selecionar(id, true);
@@ -624,8 +682,9 @@
     document.querySelectorAll('.trilho-item[data-vista]').forEach((b) => b.classList.toggle('ativo', b.dataset.vista === vista));
     $('#vista-hoje').hidden = vista !== 'hoje';
     $('#vista-clientes').hidden = vista !== 'clientes';
+    $('#vista-etapas').hidden = vista !== 'etapas';
     if (estado.painel) desenharTopo();
-    if (vista === 'clientes') carregarClientes().catch((e) => avisar(e.message, 'erro'));
+    if (vista === 'clientes' || vista === 'etapas') carregarClientes().catch((e) => avisar(e.message, 'erro'));
   }
 
   // ---------- Usuário ----------
@@ -672,7 +731,7 @@
   document.querySelectorAll('.trilho-item[data-vista]').forEach((b) => b.addEventListener('click', () => trocarVista(b.dataset.vista)));
   $('#busca').addEventListener('input', (e) => {
     estado.busca = e.target.value;
-    if (estado.vista === 'hoje') desenharHoje(); else desenharClientes();
+    if (estado.vista === 'hoje') desenharHoje(); else if (estado.vista === 'etapas') desenharEtapas(); else desenharClientes();
   });
   $('#botao-sincronizar').addEventListener('click', sincronizar);
   $('#botao-usuario').addEventListener('click', abrirUsuario);

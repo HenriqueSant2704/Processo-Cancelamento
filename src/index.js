@@ -1,5 +1,5 @@
 // Linha de comando do sistema.
-//   npm start                         -> agenda de hoje (quem contatar e o que fazer)
+//   npm run agenda                    -> agenda de hoje (quem contatar e o que fazer)
 //   npm run sincronizar               -> busca os bloqueados no SGP e abre os processos
 //   npm run cli -- processos          -> lista os processos ativos
 //   npm run cli -- processo <id>      -> cronograma e histórico de um cliente

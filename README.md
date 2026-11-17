@@ -50,7 +50,7 @@ quantidade de tentativas, intervalos, prazos, textos das tarefas e feriados.
 ```bash
 npm install
 npm run demo     # tela com clientes FICTÍCIOS (dados em data/demo, sem banco e sem login)
-npm run web      # tela de verdade (Neon com login, ou arquivo local se não houver DATABASE_URL)
+npm start        # tela de verdade (o mesmo que npm run web) (Neon com login, ou arquivo local se não houver DATABASE_URL)
 ```
 
 Depois acesse http://localhost:3000. Na tela:
@@ -115,7 +115,7 @@ render.yaml                configuração do Render
 
 ```bash
 npm run sincronizar      # busca os bloqueados no SGP e abre os processos
-npm start                # agenda de hoje
+npm run agenda           # agenda de hoje no terminal
 npm test                 # testes
 npm run cli -- processos                                   # processos ativos
 npm run cli -- processo 1                                  # cronograma e histórico do processo 1

@@ -7,7 +7,7 @@ services:
     plan: free
     region: ohio                # escolha a região mais perto da região do seu banco no Neon
     buildCommand: npm ci --omit=dev
-    startCommand: npm run web
+    startCommand: npm start
     healthCheckPath: /saude
     autoDeploy: true
     envVars:

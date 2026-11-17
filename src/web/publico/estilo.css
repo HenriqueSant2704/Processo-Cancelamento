@@ -165,10 +165,10 @@ button.indicador:hover { border-color: var(--cor, var(--marca)); transform: tran
 .cartao {
   background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio);
   box-shadow: var(--sombra); overflow: hidden;
-  animation: entrar .25s ease both;
+  animation: entrar .25s ease;
 }
 .cartao.tem-atraso { border-color: color-mix(in srgb, var(--atrasada) 35%, var(--linha)); }
-@keyframes entrar { from { opacity: 0; transform: translateY(4px); } }
+@keyframes entrar { from { transform: translateY(4px); } }
 
 .cartao-topo { display: flex; align-items: center; gap: 14px; padding: 16px 18px 12px; }
 .avatar { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--marca-suave); color: var(--marca-texto); flex-shrink: 0; }

@@ -32,7 +32,7 @@ module.exports = {
     // Campo do contrato com a data da suspensão (se o SGP mandar). Vazio = o sistema anota o 1º dia em que viu.
     campoDataSuspensao: (process.env.SGP_CAMPO_DATA_SUSPENSAO || '').trim(),
     // Sem esse campo: data do bloqueio = vencimento da fatura em aberto mais antiga + N dias.
-    diasBloqueioAposVencimento: Number(process.env.SGP_DIAS_BLOQUEIO_APOS_VENCIMENTO || 16),
+    diasBloqueioAposVencimento: Number(process.env.SGP_DIAS_BLOQUEIO_APOS_VENCIMENTO || 15),
   },
   carregarCronograma,
 };

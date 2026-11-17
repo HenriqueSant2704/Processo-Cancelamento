@@ -51,8 +51,8 @@ function resumoFaturas(titulos, contratoId) {
 //   motivos: lista de motivo_status aceitos (vazio = todos)
 //   campoData: nome do campo do contrato com a data da suspensão (vazio = não há)
 //   diasBloqueioAposVencimento: sem campoData, estima o bloqueio pela fatura em aberto
-//     mais antiga do contrato: vencimento + N dias (o SGP bloqueia com mais de 15 dias de atraso)
-function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos = [], campoData = '', diasBloqueioAposVencimento = 16 } = {}) {
+//     mais antiga do contrato: vencimento + N dias (venceu dia 1, bloqueia dia 16; o processo começa no dia 17)
+function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos = [], campoData = '', diasBloqueioAposVencimento = 15 } = {}) {
   if (!Array.isArray(clientes)) throw new ErroSgp('O SGP respondeu num formato inesperado (lista de clientes).');
   const aceitaStatus = new Set(statusSuspenso.map((s) => s.toUpperCase()));
   const aceitaMotivo = new Set(motivos.map((s) => s.toUpperCase()));

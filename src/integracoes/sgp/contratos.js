@@ -26,11 +26,33 @@ function lerData(valor) {
   return null;
 }
 
+// Faturas em aberto deste contrato.
+function faturasAbertas(titulos, contratoId) {
+  if (!Array.isArray(titulos)) return [];
+  return titulos.filter((t) => ehObjeto(t) && texto(t.clientecontrato_id, 40) === contratoId && texto(t.status, 20).toLowerCase() === 'aberto' && lerData(t.dataVencimento));
+}
+
+function bloqueioPelasFaturas(titulos, contratoId, dias) {
+  const vencimentos = faturasAbertas(titulos, contratoId).map((t) => lerData(t.dataVencimento)).sort();
+  if (!vencimentos.length) return null;
+  const [a, m, d] = vencimentos[0].split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+}
+
+// Quantas faturas em aberto e o total (só números, para a tela).
+function resumoFaturas(titulos, contratoId) {
+  const abertas = faturasAbertas(titulos, contratoId);
+  const total = abertas.reduce((soma, t) => soma + (Number(t.valorCorrigido) || Number(t.valor) || 0), 0);
+  return { faturasAbertas: abertas.length, valorAberto: Math.round(total * 100) / 100 };
+}
+
 // opcoes:
 //   statusSuspenso: lista de status que contam como suspenso (padrão ['SUSPENSO'])
 //   motivos: lista de motivo_status aceitos (vazio = todos)
 //   campoData: nome do campo do contrato com a data da suspensão (vazio = não há)
-function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos = [], campoData = '' } = {}) {
+//   diasBloqueioAposVencimento: sem campoData, estima o bloqueio pela fatura em aberto
+//     mais antiga do contrato: vencimento + N dias (o SGP bloqueia com mais de 15 dias de atraso)
+function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos = [], campoData = '', diasBloqueioAposVencimento = 16 } = {}) {
   if (!Array.isArray(clientes)) throw new ErroSgp('O SGP respondeu num formato inesperado (lista de clientes).');
   const aceitaStatus = new Set(statusSuspenso.map((s) => s.toUpperCase()));
   const aceitaMotivo = new Set(motivos.map((s) => s.toUpperCase()));
@@ -58,7 +80,8 @@ function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos =
         nome: texto(cliente.nome) || `Cliente ${clienteSgpId}`,
         clienteSgpId,
         motivo: motivo || null,
-        dataSuspensao: campoData ? lerData(contrato[campoData]) : null,
+        dataSuspensao: campoData ? lerData(contrato[campoData]) : bloqueioPelasFaturas(cliente.titulos, id, diasBloqueioAposVencimento),
+        ...resumoFaturas(cliente.titulos, id),
       });
     }
   }

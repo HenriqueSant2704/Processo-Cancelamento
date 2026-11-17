@@ -22,7 +22,8 @@ module.exports = {
   },
   sgp: {
     modo: process.env.SGP_MODO || 'exemplo',
-    uraClientesUrl: process.env.SGP_URA_CLIENTES_URL || '',
+    // SGP_BASE_URL é o nome antigo (do primeiro .env.example); aceito para não quebrar .env existentes.
+    uraClientesUrl: process.env.SGP_URA_CLIENTES_URL || process.env.SGP_BASE_URL || '',
     token: process.env.SGP_TOKEN || '',
     app: process.env.SGP_APP || '',
     // Quais status do contrato contam como "suspenso" e quais motivos entram no processo.
@@ -30,6 +31,8 @@ module.exports = {
     motivos: lista(process.env.SGP_MOTIVOS_SUSPENSAO || ''),
     // Campo do contrato com a data da suspensão (se o SGP mandar). Vazio = o sistema anota o 1º dia em que viu.
     campoDataSuspensao: (process.env.SGP_CAMPO_DATA_SUSPENSAO || '').trim(),
+    // Sem esse campo: data do bloqueio = vencimento da fatura em aberto mais antiga + N dias.
+    diasBloqueioAposVencimento: Number(process.env.SGP_DIAS_BLOQUEIO_APOS_VENCIMENTO || 16),
   },
   carregarCronograma,
 };

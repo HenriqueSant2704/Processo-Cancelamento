@@ -114,3 +114,18 @@ test('sem data no SGP: conta a partir do 1º dia em que o contrato foi visto sus
   assert.deepStrictEqual(amanha.novos.map((p) => p.cliente.id), ['22']);
   assert.strictEqual(amanha.novos[0].bloqueadoEm, '2026-11-17');
 });
+
+test('sem campo de data: bloqueio = fatura em aberto mais antiga do contrato + 16 dias', () => {
+  const titulos = [
+    { clientecontrato_id: 11, status: 'aberto', dataVencimento: '2026-10-20', valorCorrigido: 99.9 },
+    { clientecontrato_id: 11, status: 'aberto', dataVencimento: '2026-10-10', valorCorrigido: 100 },
+    { clientecontrato_id: 11, status: 'pago', dataVencimento: '2026-09-10', valorCorrigido: 100 },
+    { clientecontrato_id: 99, status: 'aberto', dataVencimento: '2026-08-01', valorCorrigido: 100 },
+  ];
+  const [c] = contratosSuspensos([{ ...cliente(1, [contrato(11, 'SUSPENSO')]), titulos }]);
+  assert.strictEqual(c.dataSuspensao, '2026-10-26');
+  assert.strictEqual(c.faturasAbertas, 2);
+  assert.strictEqual(c.valorAberto, 199.9);
+  // Sem fatura em aberto: sem data (o sistema usa o 1º dia em que viu suspenso)
+  assert.strictEqual(contratosSuspensos([cliente(2, [contrato(20, 'SUSPENSO')])])[0].dataSuspensao, null);
+});

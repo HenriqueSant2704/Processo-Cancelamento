@@ -7,98 +7,82 @@
   <link rel="icon" href="icone.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
   <div class="app">
-    <aside class="lateral">
-      <div class="marca">
-        <img src="icone.svg" alt="" width="32" height="32">
-        <div>
-          <strong>Têmis</strong>
-          <span>Cobrança e cancelamento</span>
-        </div>
+    <!-- Trilho lateral -->
+    <nav class="trilho" aria-label="Menu">
+      <img class="trilho-logo" src="icone.svg" alt="Têmis" width="34" height="34">
+      <button class="trilho-item ativo" data-vista="hoje" title="Fila de hoje" aria-label="Fila de hoje">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+        <span class="trilho-badge" id="badge-hoje"></span>
+      </button>
+      <button class="trilho-item" data-vista="clientes" title="Todos os clientes" aria-label="Todos os clientes">
+        <svg viewBox="0 0 24 24"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7"/></svg>
+      </button>
+      <div class="trilho-fim">
+        <button class="trilho-item" id="botao-tema" title="Tema claro ou escuro" aria-label="Alternar tema">
+          <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        </button>
+        <button class="avatar-usuario" id="botao-usuario" title="Usuário" aria-label="Usuário"><span id="usuario-iniciais">?</span></button>
       </div>
-      <nav class="menu">
-        <button class="menu-item ativo" data-vista="hoje">
-          <svg viewBox="0 0 24 24"><path d="M8 2v3M16 2v3M3.5 9h17M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z"/></svg>
-          <span>Hoje</span>
-          <em class="contador" id="contador-hoje"></em>
-        </button>
-        <button class="menu-item" data-vista="clientes">
-          <svg viewBox="0 0 24 24"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7"/></svg>
-          <span>Todos os clientes</span>
-        </button>
-      </nav>
-      <div class="lateral-rodape">
-        <div class="selo-demo" id="selo-demo" hidden>Modo demonstração<br><small>clientes fictícios</small></div>
-        <button class="usuario" id="botao-usuario" title="Trocar usuário">
-          <span class="avatar pequeno" id="usuario-iniciais">?</span>
-          <span><small>Conectado como</small><strong id="usuario-nome">—</strong></span>
-        </button>
-      </div>
-    </aside>
+    </nav>
 
-    <main class="conteudo">
-      <header class="topo">
-        <div>
-          <p class="sobretitulo" id="data-extenso"></p>
-          <h1 id="saudacao">Olá</h1>
+    <div class="principal">
+      <!-- Barra superior -->
+      <header class="barra">
+        <div class="barra-titulo">
+          <span class="sobretitulo" id="data-extenso"></span>
+          <h1 id="saudacao">Fila de hoje</h1>
         </div>
-        <div class="topo-acoes">
-          <label class="simular" id="simular" hidden>
-            <span>Simular dia</span>
+        <div class="barra-acoes">
+          <label class="busca">
+            <svg viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>
+            <input type="search" id="busca" placeholder="Buscar cliente ou contrato" autocomplete="off">
+            <kbd>/</kbd>
+          </label>
+          <label class="simular" id="simular" hidden title="Só no modo demonstração">
+            <span>Dia</span>
             <input type="date" id="campo-data">
           </label>
-          <button class="botao secundario" id="botao-sincronizar">
-            <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
-            <span id="rotulo-sincronizar">Sincronizar SGP</span>
-          </button>
+          <div class="sync" id="sync">
+            <i class="sync-luz" id="sync-luz"></i>
+            <span class="sync-texto" id="sync-texto">SGP</span>
+            <button class="botao-sync" id="botao-sincronizar" title="Buscar suspensos no SGP agora">
+              <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
+              <span>Sincronizar</span>
+            </button>
+          </div>
         </div>
-        <p class="ultima-sincronizacao" id="ultima-sincronizacao" aria-live="polite"></p>
       </header>
 
+      <!-- Vista: fila de hoje -->
       <section id="vista-hoje" class="vista">
-        <div class="indicadores" id="indicadores"></div>
+        <div class="painel-topo">
+          <div class="metricas" id="metricas"></div>
+          <div class="funil" id="funil" aria-label="Clientes por etapa"></div>
+        </div>
 
-        <div class="grade">
-          <div class="coluna-principal">
-            <div class="barra-filtros">
-              <div class="filtros" id="filtros" role="tablist"></div>
-              <label class="busca">
-                <svg viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>
-                <input type="search" id="busca" placeholder="Buscar cliente ou contrato">
-              </label>
+        <div class="mesa">
+          <section class="fila" aria-label="Fila de trabalho">
+            <div class="fila-cabeca">
+              <div class="abas" id="abas" role="tablist"></div>
             </div>
-            <div id="lista-hoje" class="lista-cartoes"></div>
-          </div>
+            <div class="fila-lista" id="fila" role="listbox" aria-label="Clientes para atender hoje"></div>
+            <div class="fila-rodape"><kbd>↑</kbd><kbd>↓</kbd> navegar <span class="sep">·</span> <kbd>/</kbd> buscar</div>
+          </section>
 
-          <aside class="coluna-lateral">
-            <div class="painel">
-              <h2>Próximos dias</h2>
-              <ol class="proximos" id="proximos"></ol>
-            </div>
-            <div class="painel">
-              <h2>Como ler as cores</h2>
-              <ul class="legenda">
-                <li><i class="ponto contato"></i>Contato com o cliente</li>
-                <li><i class="ponto acao"></i>Ação no SGP</li>
-                <li><i class="ponto decisao"></i>Pergunta "regularizou?"</li>
-                <li><i class="ponto atrasada"></i>Atrasada</li>
-              </ul>
-            </div>
-          </aside>
+          <section class="ficha" id="ficha" aria-live="polite"></section>
         </div>
       </section>
 
+      <!-- Vista: todos os clientes -->
       <section id="vista-clientes" class="vista" hidden>
-        <div class="barra-filtros">
-          <div class="filtros" id="filtros-clientes"></div>
-          <label class="busca">
-            <svg viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>
-            <input type="search" id="busca-clientes" placeholder="Buscar cliente ou contrato">
-          </label>
+        <div class="clientes-topo">
+          <div class="abas" id="abas-clientes"></div>
+          <div class="funil compacto" id="funil-clientes"></div>
         </div>
         <div class="tabela-wrap">
           <table class="tabela">
@@ -109,19 +93,13 @@
           </table>
         </div>
       </section>
-    </main>
+    </div>
   </div>
 
-  <!-- Detalhe do cliente -->
-  <div class="gaveta-fundo" id="gaveta-fundo" hidden></div>
-  <aside class="gaveta" id="gaveta" aria-hidden="true" tabindex="-1">
-    <div id="gaveta-conteudo"></div>
-  </aside>
-
-  <!-- Janela de decisão / usuário -->
+  <!-- Decisão "regularizou?" -->
   <dialog class="janela" id="janela-decisao">
     <form method="dialog" id="form-decisao">
-      <p class="sobretitulo" id="decisao-cliente"></p>
+      <span class="sobretitulo" id="decisao-cliente"></span>
       <h3 id="decisao-pergunta"></h3>
       <div class="escolha">
         <label class="opcao sim"><input type="radio" name="resposta" value="sim" required><span>Sim, regularizou</span></label>
@@ -131,14 +109,15 @@
         <span id="decisao-rotulo">O que foi feito? Por quê?</span>
         <textarea name="observacao" rows="3" required placeholder="Ex.: Pagou via PIX hoje às 10h / Não atendeu as ligações"></textarea>
       </label>
-      <p class="aviso-proximo" id="decisao-efeito"></p>
+      <p class="efeito" id="decisao-efeito"></p>
       <div class="janela-acoes">
-        <button type="button" class="botao fantasma" value="cancelar" id="decisao-cancelar">Cancelar</button>
+        <button type="button" class="botao fantasma" id="decisao-cancelar">Cancelar</button>
         <button type="submit" class="botao primario">Registrar</button>
       </div>
     </form>
   </dialog>
 
+  <!-- Nome (modo sem login) -->
   <dialog class="janela" id="janela-usuario">
     <form method="dialog" id="form-usuario">
       <h3>Quem está usando?</h3>
@@ -153,6 +132,7 @@
     </form>
   </dialog>
 
+  <!-- Trocar senha -->
   <dialog class="janela" id="janela-senha">
     <form method="dialog" id="form-senha">
       <h3>Trocar senha</h3>
@@ -176,7 +156,6 @@
   </dialog>
 
   <div class="avisos" id="avisos" aria-live="polite"></div>
-
   <script src="app.js"></script>
 </body>
 </html>

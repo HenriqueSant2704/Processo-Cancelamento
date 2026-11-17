@@ -60,6 +60,8 @@ function painel(processos, hoje, cronograma) {
   return {
     hoje,
     fases: cronograma.fases,
+    // Quantos processos ativos estão em cada fase (para o funil da tela).
+    funil: cronograma.fases.map((fase) => ({ fase, total: visoes.filter((v) => v.etapa && v.etapa.fase === fase).length })),
     resumo: {
       paraHoje: tarefas.filter((t) => !t.atrasada).length,
       atrasadas: tarefas.filter((t) => t.atrasada).length,

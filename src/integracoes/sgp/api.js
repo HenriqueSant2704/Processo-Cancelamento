@@ -15,7 +15,7 @@ class ErroSgp extends Error {
   }
 }
 
-const PADROES = { tamanhoPagina: 100, maximoPaginas: 300, tentativas: 3, tempoLimiteMs: 60_000, esperasMs: [2_000, 5_000] };
+const PADROES = { tamanhoPagina: 100, maximoPaginas: 300, tentativas: 4, tempoLimiteMs: 120_000, esperasMs: [3_000, 10_000, 20_000] };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 

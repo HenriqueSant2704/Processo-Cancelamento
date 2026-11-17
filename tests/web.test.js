@@ -81,7 +81,7 @@ test('agenda de um dia futuro e ajuste de etapa pela API', async (t) => {
   assert.ok(agenda.clientes.every((c) => c.paraHoje.every((x) => x.data === '2026-11-18')));
   assert.strictEqual((await chamar('/api/agenda' + d)).status, 400);
 
-  const id = agenda.clientes[0].id;
+  const id = agenda.clientes.find((c) => c.fluxo === 'principal').id;
   const ajuste = await chamar(`/api/processos/${id}/ajustar${d}`, { por: 'Jessica', etapa: 'notificacao-negativacao', contatosFeitos: 1, dataReferencia: '2026-11-13' });
   assert.strictEqual(ajuste.status, 200);
   assert.ok(ajuste.json.etapasAjustaveis.length >= 4);

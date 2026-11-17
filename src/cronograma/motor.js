@@ -169,6 +169,7 @@ function posicionar(processo, { etapaId, contatosFeitos = 0, dataReferencia, por
   if (!por) throw new Error('Informe quem fez o ajuste.');
   const etapa = obterEtapa(cronograma, etapaId);
   if (!['contatos', 'aguardo', 'acao'].includes(etapa.tipo)) throw new Error('Escolha uma etapa de avisos, de espera ou de ação.');
+  if (!obterFluxo(cronograma, processo.fluxo || 'principal').fases.includes(etapa.fase)) throw new Error('Essa etapa não faz parte do fluxo deste cliente.');
   if (dataReferencia && !/^\d{4}-\d{2}-\d{2}$/.test(dataReferencia)) throw new Error('Data inválida.');
   if (dataReferencia && dataReferencia > data) throw new Error('A data informada não pode ser no futuro.');
   const feriados = cronograma.feriados || [];

@@ -60,12 +60,31 @@ async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }
   return { totalPosCancelamento: lista.length, novos };
 }
 
-// Suspensos + pós-cancelamento numa rodada só.
+// Pós-cancelamento + suspensos numa rodada só. As duas partes são independentes:
+// se uma falhar (ex.: SGP lento), a outra ainda é gravada; o erro é repassado no fim.
 async function sincronizarTudo(args) {
-  const suspensos = await sincronizar(args);
-  if (typeof args.sgp.listarPosCancelamento !== 'function') return { ...suspensos, totalPosCancelamento: 0 };
-  const pos = await sincronizarPosCancelamento(args);
-  return { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
+  const erros = [];
+  let pos = { totalPosCancelamento: 0, novos: [] };
+  if (typeof args.sgp.listarPosCancelamento === 'function') {
+    try {
+      pos = await sincronizarPosCancelamento(args);
+    } catch (erro) {
+      erros.push(`pós-cancelamento: ${erro.message}`);
+    }
+  }
+  let suspensos = { totalBloqueados: 0, novos: [] };
+  try {
+    suspensos = await sincronizar(args);
+  } catch (erro) {
+    erros.push(`suspensos: ${erro.message}`);
+  }
+  const resultado = { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
+  if (erros.length) {
+    const erro = new Error(`Sincronização incompleta (${erros.join('; ')}). ${resultado.novos.length} novo(s) processo(s) foram gravados.`);
+    erro.resultadoParcial = resultado;
+    throw erro;
+  }
+  return resultado;
 }
 
 async function agenda({ repositorio, hoje }) {

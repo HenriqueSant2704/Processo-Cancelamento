@@ -40,13 +40,13 @@ test('lê todas as páginas de 100 em 100 com app e token no corpo', async () =>
   assert.ok(falso.pedidos.every((p) => p.app === 'app' && p.token === 'segredo' && p.limit === 100));
 });
 
-test('tenta de novo quando a conexão falha e desiste depois de 3 tentativas', async () => {
+test('tenta de novo quando a conexão falha e desiste depois de 4 tentativas', async () => {
   const ok = sgpFalso([cliente(1, [])], { falhas: 2 });
   assert.strictEqual((await api(ok).lerTodosClientes()).clientes.length, 1);
 
   const ruim = sgpFalso([cliente(1, [])], { falhas: 5 });
   await assert.rejects(api(ruim).lerTodosClientes(), /Não foi possível conectar/);
-  assert.strictEqual(ruim.pedidos.length, 3);
+  assert.strictEqual(ruim.pedidos.length, 4);
 });
 
 test('token errado: mensagem clara, sem repetir e sem vazar o token', async () => {

@@ -4,7 +4,8 @@ const { ErroConflito } = require('./repositorio');
 const COLUNAS_PROCESSO = `
   id::text as id, cliente_id, cliente_nome, cliente_contrato,
   bloqueado_em::text as bloqueado_em, iniciado_em::text as iniciado_em,
-  status, resultado, etapa_atual, finalizado_em::text as finalizado_em, versao`;
+  status, resultado, etapa_atual, finalizado_em::text as finalizado_em, versao,
+  valor_aberto::float8 as valor_aberto, faturas_abertas, financeiro_em::text as financeiro_em`;
 
 const COLUNAS_TAREFA = `
   id, processo_id::text as processo_id, etapa, tipo, descricao, data::text as data, status,
@@ -21,6 +22,7 @@ function linhaParaProcesso(l) {
     etapaAtual: l.etapa_atual,
     finalizadoEm: l.finalizado_em,
     versao: l.versao,
+    financeiro: l.financeiro_em ? { valorAberto: l.valor_aberto, faturasAbertas: l.faturas_abertas, em: l.financeiro_em } : null,
     tarefas: [],
     historico: [],
   };
@@ -98,15 +100,21 @@ class RepositorioPostgres {
     });
   }
 
+  // Atualiza só o valor em aberto (vem do SGP a cada sincronização).
+  async atualizarFinanceiro(processoId, { valorAberto, faturasAbertas, em }) {
+    await this.banco.query('update processos set valor_aberto = $2, faturas_abertas = $3, financeiro_em = $4 where id = $1', [processoId, valorAberto ?? null, faturasAbertas ?? null, em]);
+  }
+
   // Grava o processo inteiro numa transação (tudo ou nada).
   async salvarProcesso(processo) {
     await this.banco.transacao(async (query) => {
       if (processo.versao === undefined) {
         await query(
-          `insert into processos (id, cliente_id, cliente_nome, cliente_contrato, bloqueado_em, iniciado_em, status, resultado, etapa_atual, finalizado_em)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          `insert into processos (id, cliente_id, cliente_nome, cliente_contrato, bloqueado_em, iniciado_em, status, resultado, etapa_atual, finalizado_em, valor_aberto, faturas_abertas, financeiro_em)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [processo.id, processo.cliente.id, processo.cliente.nome, processo.cliente.contrato, processo.bloqueadoEm, processo.iniciadoEm,
-            processo.status, processo.resultado, processo.etapaAtual, processo.finalizadoEm || null],
+            processo.status, processo.resultado, processo.etapaAtual, processo.finalizadoEm || null,
+            processo.financeiro?.valorAberto ?? null, processo.financeiro?.faturasAbertas ?? null, processo.financeiro?.em ?? null],
         );
         processo.versao = 1;
       } else {

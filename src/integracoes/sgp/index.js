@@ -18,7 +18,7 @@ function criarFonteApi(config, opcoesApi = {}) {
         motivos: config.sgp.motivos,
         campoData: config.sgp.campoDataSuspensao,
         diasBloqueioAposVencimento: config.sgp.diasBloqueioAposVencimento,
-      }).map((c) => ({ id: c.id, nome: c.nome, contrato: c.contrato, bloqueadoEm: c.dataSuspensao }));
+      }).map((c) => ({ id: c.id, nome: c.nome, contrato: c.contrato, bloqueadoEm: c.dataSuspensao, financeiro: { valorAberto: c.valorAberto, faturasAbertas: c.faturasAbertas } }));
     },
   };
 }

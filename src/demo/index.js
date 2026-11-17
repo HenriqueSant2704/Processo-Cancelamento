@@ -73,6 +73,8 @@ function semear(arquivo, hoje) {
     const id = String(i + 1);
     const processo = montarCenario({ ...cenario, id, cliente }, hoje, cronograma);
     if (processo) {
+      const faturas = 1 + (i % 3);
+      processo.financeiro = { valorAberto: Math.round(faturas * (89.9 + i * 10) * 100) / 100, faturasAbertas: faturas, em: hoje };
       repositorio.dados.ultimoId = Number(id);
       repositorio.dados.processos.push(processo);
     }

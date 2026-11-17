@@ -17,7 +17,11 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
 
   for (const cliente of bloqueados) {
     if (diasEntre(cliente.bloqueadoEm, hoje) < minimo) continue;
-    if (await repositorio.processoAtivoDoCliente(cliente.id)) continue;
+    const existente = await repositorio.processoAtivoDoCliente(cliente.id);
+    if (existente) {
+      if (cliente.financeiro) await repositorio.atualizarFinanceiro(existente.id, { ...cliente.financeiro, em: hoje });
+      continue;
+    }
     const processo = criarProcesso({
       id: await repositorio.proximoId(),
       cliente: { id: String(cliente.id), nome: cliente.nome, contrato: cliente.contrato },
@@ -25,6 +29,7 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
       inicio: hoje,
       cronograma,
     });
+    if (cliente.financeiro) processo.financeiro = { ...cliente.financeiro, em: hoje };
     await repositorio.salvarProcesso(processo);
     novos.push(processo);
   }

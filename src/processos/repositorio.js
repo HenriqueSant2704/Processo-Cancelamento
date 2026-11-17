@@ -48,6 +48,11 @@ class RepositorioJson {
     this.gravarArquivo();
   }
 
+  async atualizarFinanceiro(processoId, financeiro) {
+    const p = await this.obter(processoId);
+    if (p) { p.financeiro = financeiro; this.gravarArquivo(); }
+  }
+
   // Ver explicação em repositorioPostgres.js (registrarSuspensos).
   async registrarSuspensos(ids, hoje, diasPrimeiraVez) {
     const { adicionarDias } = require('../utils/datas');

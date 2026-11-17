@@ -42,7 +42,7 @@ test('API da tela (modo demonstração, sem login): sincronizar, painel, conclui
   const painel = (await chamar('/api/painel' + d)).json;
   assert.strictEqual(painel.resumo.clientesHoje, 2);
   assert.strictEqual(painel.resumo.paraHoje, 4); // 2 clientes x (abrir ocorrência + 1º aviso)
-  assert.strictEqual(painel.proximosDias.length, 5);
+  assert.strictEqual(painel.proximosDias.length, 10);
 
   const tarefa = painel.clientes[0].paraHoje[0];
   const feito = await chamar(`/api/tarefas/${tarefa.id}/concluir${d}`, { por: 'Jessica' });
@@ -68,4 +68,23 @@ test('fora do modo demonstração não dá para simular outro dia', async (t) =>
   const { chamar } = subir(t, { repositorio: new RepositorioJson(null) });
   const painel = (await chamar('/api/painel?data=2020-01-01')).json;
   assert.notStrictEqual(painel.hoje, '2020-01-01');
+});
+
+test('agenda de um dia futuro e ajuste de etapa pela API', async (t) => {
+  const { chamar } = subir(t, { repositorio: new RepositorioJson(null), modoDemo: true });
+  const d = '?data=2026-11-16';
+  let s = (await chamar('/api/sincronizar' + d, {})).json;
+  while (s.emAndamento) s = (await chamar('/api/sincronizacao')).json;
+
+  const agenda = (await chamar('/api/agenda' + d + '&dia=2026-11-18')).json;
+  assert.strictEqual(agenda.clientes.length, 2); // 2º aviso dos dois clientes cai na quarta
+  assert.ok(agenda.clientes.every((c) => c.paraHoje.every((x) => x.data === '2026-11-18')));
+  assert.strictEqual((await chamar('/api/agenda' + d)).status, 400);
+
+  const id = agenda.clientes[0].id;
+  const ajuste = await chamar(`/api/processos/${id}/ajustar${d}`, { por: 'Jessica', etapa: 'notificacao-negativacao', contatosFeitos: 1, dataReferencia: '2026-11-13' });
+  assert.strictEqual(ajuste.status, 200);
+  assert.ok(ajuste.json.etapasAjustaveis.length >= 4);
+  const ruim = await chamar(`/api/processos/${id}/ajustar${d}`, { por: 'Jessica', etapa: 'aguardo-negativado' });
+  assert.strictEqual(ruim.status, 400);
 });

@@ -68,6 +68,7 @@
         <div class="mesa">
           <section class="fila" aria-label="Fila de trabalho">
             <div class="fila-cabeca">
+              <div class="dias-agenda" id="dias-agenda" aria-label="Escolher o dia"></div>
               <div class="abas" id="abas" role="tablist"></div>
             </div>
             <div class="fila-lista" id="fila" role="listbox" aria-label="Clientes para atender hoje"></div>
@@ -113,6 +114,36 @@
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="decisao-cancelar">Cancelar</button>
         <button type="submit" class="botao primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ajustar etapa -->
+  <dialog class="janela" id="janela-ajuste">
+    <form method="dialog" id="form-ajuste">
+      <span class="sobretitulo" id="ajuste-cliente"></span>
+      <h3>Ajustar etapa</h3>
+      <p class="texto-suave">Para clientes que já foram tratados antes do sistema. As tarefas pendentes são substituídas pelo cronograma a partir da data real.</p>
+      <label class="campo">
+        <span>Em que etapa o cliente está?</span>
+        <select name="etapa" required></select>
+      </label>
+      <label class="campo" id="ajuste-avisos">
+        <span>Quantos avisos desta etapa já foram enviados?</span>
+        <input name="contatosFeitos" type="number" min="0" max="3" value="0" inputmode="numeric">
+      </label>
+      <label class="campo" id="ajuste-data">
+        <span id="ajuste-data-rotulo">Data em que o último aviso foi enviado</span>
+        <input name="dataReferencia" type="date">
+      </label>
+      <label class="campo">
+        <span>Observação (opcional)</span>
+        <input name="observacao" maxlength="300" placeholder="Ex.: avisos enviados pelo WhatsApp antes do sistema">
+      </label>
+      <p class="efeito" id="ajuste-efeito"></p>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="ajuste-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Ajustar</button>
       </div>
     </form>
   </dialog>

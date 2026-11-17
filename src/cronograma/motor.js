@@ -1,7 +1,7 @@
 // Motor do cronograma: cria o processo de um cliente, gera as tarefas de cada
 // etapa com as datas certas e avança conforme o funcionário conclui as tarefas.
 // Todas as regras (prazos, tentativas, intervalos) vêm do cronograma.json.
-const { proximoDiaUtil, adicionarDias, adicionarDiasUteis } = require('../utils/datas');
+const { proximoDiaUtil, adicionarDias, adicionarDiasUteis, subtrairDiasUteis } = require('../utils/datas');
 const { registrar } = require('../auditoria/historico');
 
 function obterEtapa(cronograma, id) {
@@ -144,6 +144,52 @@ function concluirTarefa(processo, tarefaId, { por, data, observacao, resposta },
   return tarefa;
 }
 
+// Ajuste de etapa: coloca o processo na etapa certa para clientes que já foram
+// tratados ANTES do sistema. O que estava pendente é cancelado e a etapa escolhida
+// é montada a partir da data real informada, para os próximos dias saírem certos.
+//   etapaId: etapa onde o cliente está
+//   contatosFeitos: (etapa de contatos) quantos avisos dela já foram enviados
+//   dataReferencia: data do último aviso enviado (contatos) ou do início da espera (aguardo)
+function posicionar(processo, { etapaId, contatosFeitos = 0, dataReferencia, por, data, observacao }, cronograma) {
+  if (processo.status !== 'ativo') throw new Error(`O processo ${processo.id} já foi finalizado.`);
+  if (!por) throw new Error('Informe quem fez o ajuste.');
+  const etapa = obterEtapa(cronograma, etapaId);
+  if (!['contatos', 'aguardo', 'acao'].includes(etapa.tipo)) throw new Error('Escolha uma etapa de avisos, de espera ou de ação.');
+  if (dataReferencia && !/^\d{4}-\d{2}-\d{2}$/.test(dataReferencia)) throw new Error('Data inválida.');
+  if (dataReferencia && dataReferencia > data) throw new Error('A data informada não pode ser no futuro.');
+  const feriados = cronograma.feriados || [];
+  const feitos = Number(contatosFeitos) || 0;
+
+  let base = data;
+  if (etapa.tipo === 'contatos') {
+    if (!Number.isInteger(feitos) || feitos < 0 || feitos > etapa.tentativas) throw new Error(`Avisos já enviados: de 0 a ${etapa.tentativas}.`);
+    if (feitos > 0) {
+      if (!dataReferencia) throw new Error('Informe a data do último aviso enviado.');
+      base = subtrairDiasUteis(dataReferencia, (feitos - 1) * etapa.intervaloDiasUteis, feriados);
+    }
+  } else if (etapa.tipo === 'aguardo') {
+    if (!dataReferencia) throw new Error('Informe a data em que a espera começou (ex.: dia da negativação).');
+    base = dataReferencia;
+  }
+
+  for (const t of processo.tarefas) {
+    if (t.status === 'pendente') Object.assign(t, { status: 'cancelada', canceladaEm: data });
+  }
+  const detalhe = etapa.tipo === 'contatos' ? ` · ${feitos} de ${etapa.tentativas} avisos já enviados${feitos ? ` (último em ${dataReferencia})` : ''}` : etapa.tipo === 'aguardo' ? ` · espera desde ${dataReferencia}` : '';
+  registrar(processo, { data, por, evento: 'etapa-ajustada', detalhes: `Ajuste manual para "${etapa.nome}"${detalhe}${observacao ? ` | ${observacao}` : ''}` });
+
+  const antes = processo.tarefas.length;
+  iniciarEtapa(processo, etapa.id, base, cronograma);
+  if (etapa.tipo === 'contatos' && feitos > 0) {
+    const novas = processo.tarefas.slice(antes);
+    const jaFeitas = [...novas.filter((t) => t.tipo === 'acao'), ...novas.filter((t) => t.tipo === 'contato').slice(0, feitos)];
+    for (const t of jaFeitas) {
+      Object.assign(t, { status: 'concluida', concluidaEm: t.data, concluidaPor: por, observacao: observacao || 'Feito antes do sistema (registrado no ajuste de etapa).' });
+    }
+  }
+  return processo;
+}
+
 // Tarefas pendentes até a data informada, agrupadas por cliente
 // (as de dias anteriores aparecem como atrasadas).
 function agendaDoDia(processos, hoje) {
@@ -164,4 +210,4 @@ function agendaDoDia(processos, hoje) {
   );
 }
 
-module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, agendaDoDia, obterEtapa };
+module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, agendaDoDia, obterEtapa };

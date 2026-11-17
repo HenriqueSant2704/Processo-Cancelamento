@@ -9,7 +9,7 @@ function criarFonteExemplo(hoje) {
   ];
   return {
     async listarClientesBloqueados() {
-      return clientes.map(({ diasBloqueado, ...c }) => ({ ...c, bloqueadoEm: adicionarDias(hoje, -diasBloqueado) }));
+      return clientes.map(({ diasBloqueado, ...c }) => ({ ...c, bloqueadoEm: adicionarDias(hoje, -diasBloqueado), financeiro: { valorAberto: 99.9, faturasAbertas: 1 } }));
     },
   };
 }

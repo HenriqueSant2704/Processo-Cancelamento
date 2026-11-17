@@ -14,6 +14,8 @@
     painel: null,
     processos: null,
     selecionado: null, // id do processo aberto na ficha
+    dia: null, // dia escolhido na agenda (null = hoje)
+    agenda: null, // clientes com tarefas no dia escolhido
     usuario: lerLocal('temis.usuario') || '',
     comLogin: false,
   };
@@ -78,6 +80,8 @@
   const nivelDias = (d) => (d > 30 ? 'critico' : d > 15 ? 'alto' : '');
   const titulo = (nome) => String(nome).toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, e, l) => e + l.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, (p) => p.toLowerCase());
 
+  const dinheiro = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: v >= 1000 ? 0 : 2 });
+
   function chipDias(dias) {
     return el('span', { class: `dias ${nivelDias(dias)}`, title: 'Dias suspenso no SGP' }, String(dias), el('small', {}, dias === 1 ? 'dia' : 'dias'));
   }
@@ -119,6 +123,7 @@
   }
   async function recarregar() {
     try {
+      if (estado.dia) estado.agenda = (await api(`/api/agenda?dia=${estado.dia}`)).clientes;
       await carregarPainel();
       if (estado.vista === 'clientes') await carregarClientes();
     } catch (erro) {
@@ -164,9 +169,12 @@
   ];
   const passaAba = (t) => estado.aba === 'todos' || (estado.aba === 'atrasadas' ? t.atrasada : t.tipo === estado.aba);
 
+  // Hoje: a fila do painel. Outro dia: a agenda daquele dia.
+  const clientesBase = () => (estado.dia ? estado.agenda || [] : estado.painel.clientes);
+
   function clientesVisiveis() {
     const termo = normalizar(estado.busca);
-    return estado.painel.clientes
+    return clientesBase()
       .filter((c) => !termo || normalizar(`${c.cliente.nome} ${c.cliente.contrato}`).includes(termo))
       .filter((c) => c.paraHoje.some(passaAba));
   }
@@ -182,14 +190,13 @@
       m({ cor: '--marca', rotulo: 'Para hoje', valor: r.paraHoje, detalhe: plural(r.clientesHoje, 'cliente', 'clientes') }),
       m({ cor: '--perigo', rotulo: 'Atrasadas', valor: r.atrasadas, detalhe: r.atrasadas ? 'de dias anteriores' : 'tudo em dia', aba: 'atrasadas' }),
       m({ cor: '--decisao', rotulo: 'Regularizou?', valor: r.decisoes, detalhe: 'para responder', aba: 'decisao' }),
-      m({ cor: '--sucesso', rotulo: 'Regularizados', valor: r.regularizados, detalhe: `${r.cancelados} cancelados` }),
+      m({ cor: '--alerta', rotulo: 'Em aberto', valor: dinheiro(r.valorAberto || 0), detalhe: `${plural(r.regularizados, 'regularizado', 'regularizados')} · ${plural(r.cancelados, 'cancelado', 'cancelados')}` }),
     );
   }
 
   function desenharAbas() {
-    const todas = estado.painel.clientes.flatMap((c) => c.paraHoje);
-    const conta = (id) => (id === 'todos' ? estado.painel.clientes.length : estado.painel.clientes.filter((c) => c.paraHoje.some((t) => (id === 'atrasadas' ? t.atrasada : t.tipo === id))).length);
-    void todas;
+    const base = clientesBase();
+    const conta = (id) => (id === 'todos' ? base.length : base.filter((c) => c.paraHoje.some((t) => (id === 'atrasadas' ? t.atrasada : t.tipo === id))).length);
     $('#abas').replaceChildren(...ABAS.map((a) => el('button', {
       class: `aba${estado.aba === a.id ? ' ativa' : ''}`, role: 'tab', 'aria-selected': String(estado.aba === a.id), onclick: () => trocarAba(a.id),
     }, a.cor ? el('i', { style: `background:${a.cor}` }) : null, a.nome, el('b', {}, String(conta(a.id))))));
@@ -211,16 +218,47 @@
     el('span', { class: 'avatar' }, iniciais(c.cliente.nome)),
     el('span', { style: 'min-width:0' },
       el('span', { class: 'lc-nome' }, titulo(c.cliente.nome)),
-      el('span', { class: 'lc-meta' }, el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', etapaTxt)),
+      el('span', { class: 'lc-meta' },
+        el('span', { class: 'pontos', title: plural(c.paraHoje.length, 'tarefa no dia', 'tarefas no dia') },
+          c.paraHoje.map((t) => el('i', { class: t.atrasada ? 'p-atrasada' : `p-${t.tipo}` }))),
+        el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', etapaTxt)),
     el('span', { class: 'lc-direita' },
       chipDias(c.diasBloqueado),
-      el('span', { class: 'pontos', title: plural(c.paraHoje.length, 'tarefa hoje', 'tarefas hoje') },
-        c.paraHoje.map((t) => el('i', { class: t.atrasada ? 'p-atrasada' : `p-${t.tipo}` })))));
+      c.financeiro && c.financeiro.valorAberto ? el('span', { class: 'mono valor', title: 'Em aberto no SGP' }, dinheiro(c.financeiro.valorAberto)) : null));
+  }
+
+  // Tira de dias: Hoje, Amanhã e os próximos dias úteis, com quantos clientes há em cada um.
+  function desenharDias() {
+    const p = estado.painel;
+    const amanha = p.proximosDias[0] && p.proximosDias[0].data;
+    const chip = (data, rotulo, n, alerta) => el('button', {
+      class: `dia-chip${(estado.dia || p.hoje) === data ? ' ativo' : ''}${alerta ? ' alerta' : ''}`,
+      onclick: () => escolherDia(data === p.hoje ? null : data),
+      title: plural(n, 'cliente', 'clientes'),
+    }, el('span', {}, rotulo), el('b', {}, String(n)));
+    $('#dias-agenda').replaceChildren(
+      chip(p.hoje, 'Hoje', p.resumo.clientesHoje, p.resumo.atrasadas > 0),
+      ...p.proximosDias.map((d) => chip(d.data, d.data === amanha && diasEntre(p.hoje, d.data) === 1 ? 'Amanhã' : dataCurta(d.data), d.clientes)));
+  }
+
+  async function escolherDia(dia) {
+    estado.dia = dia;
+    estado.agenda = null;
+    estado.selecionado = null;
+    if (dia) {
+      try {
+        estado.agenda = (await api(`/api/agenda?dia=${dia}`)).clientes;
+      } catch (erro) {
+        avisar(erro.message, 'erro');
+      }
+    }
+    desenharHoje();
   }
 
   function desenharHoje() {
     desenharMetricas();
     desenharFunil($('#funil'));
+    desenharDias();
     desenharAbas();
     const lista = clientesVisiveis();
 
@@ -228,7 +266,7 @@
     const grupos = [
       { nome: 'Atrasados', itens: lista.filter((c) => c.paraHoje.some((t) => t.atrasada)) },
       { nome: 'Responder "regularizou?"', itens: lista.filter((c) => !c.paraHoje.some((t) => t.atrasada) && c.paraHoje.some((t) => t.tipo === 'decisao')) },
-      { nome: 'Para hoje', itens: lista.filter((c) => !c.paraHoje.some((t) => t.atrasada || t.tipo === 'decisao')) },
+      { nome: estado.dia ? `Agendados para ${dataCurta(estado.dia)}` : 'Para hoje', itens: lista.filter((c) => !c.paraHoje.some((t) => t.atrasada || t.tipo === 'decisao')) },
     ].filter((g) => g.itens.length);
     for (const g of grupos) g.itens.sort((a, b) => b.diasBloqueado - a.diasBloqueado || a.cliente.nome.localeCompare(b.cliente.nome));
 
@@ -248,7 +286,7 @@
     const ordem = grupos.flatMap((g) => g.itens.map((c) => c.id));
     estado.ordemFila = ordem;
     if (!estado.selecionado || !ordem.includes(estado.selecionado)) {
-      if (ordem.length && matchMedia('(min-width: 901px)').matches) selecionar(ordem[0]);
+      if (ordem.length && (telaLarga.matches || innerWidth > 900)) selecionar(ordem[0]);
       else if (!ordem.length && !estado.fichaFixa) desenharFichaVazia();
     }
   }
@@ -313,7 +351,9 @@
     // Cronograma agrupado por etapa
     const itens = [];
     let anterior = null;
+    const canceladas = d.tarefas.filter((t) => t.status === 'cancelada').length;
     for (const t of d.tarefas) {
+      if (t.status === 'cancelada' && !estado.verCanceladas) continue;
       if (t.etapa !== anterior) { itens.push(el('li', { class: 'lt-grupo' }, t.etapaNome)); anterior = t.etapa; }
       const atrasada = t.status === 'pendente' && t.data < hoje();
       const sub = t.status === 'concluida' ? `Feito por ${t.concluidaPor} em ${dataCurta(t.concluidaEm)}` : t.status === 'cancelada' ? 'Não foi necessário' : atrasada ? 'Atrasada' : 'Previsto';
@@ -336,12 +376,16 @@
         el('div', { style: 'min-width:0;flex:1' },
           el('h2', {}, titulo(d.cliente.nome)),
           el('div', { class: 'lc-meta' }, el('span', { class: 'mono' }, `Contrato #${d.cliente.contrato}`), '·', el('span', { class: 'mono' }, `Processo ${d.id}`))),
-        situacao),
+        situacao,
+        fim ? null : el('button', { class: 'botao fantasma pequeno', title: 'Para clientes já tratados antes do sistema', onclick: () => abrirAjuste(d) }, 'Ajustar etapa')),
       el('div', { class: 'ficha-corpo' },
-        el('div', { class: 'numeros' },
+        el('div', { class: 'numeros quatro' },
           el('div', { class: `numero ${fim ? '' : nivelDias(d.diasBloqueado)}` },
             el('small', {}, fim ? 'Finalizado em' : 'Suspenso há'),
             fim ? el('strong', {}, dataCurta(d.finalizadoEm)) : el('strong', {}, String(d.diasBloqueado), el('span', {}, d.diasBloqueado === 1 ? 'dia' : 'dias'))),
+          el('div', { class: 'numero', title: d.financeiro ? `Atualizado em ${dataCurta(d.financeiro.em)}` : 'Ainda sem informação do SGP' },
+            el('small', {}, 'Em aberto'),
+            el('strong', {}, d.financeiro ? dinheiro(d.financeiro.valorAberto || 0) : '—', d.financeiro ? el('span', {}, plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')) : null)),
           el('div', { class: 'numero' }, el('small', {}, 'Etapa'), el('strong', {}, fim ? '—' : `${d.faseIndice + 1}/${d.fases.length}`, el('span', {}, fim ? '' : d.etapa.fase))),
           el('div', { class: 'numero' }, el('small', {}, 'Próximo passo'), el('strong', {}, d.paraHoje.length ? 'Hoje' : proxima ? dataCurta(proxima.data) : '—'))),
         el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
@@ -350,7 +394,10 @@
           el('div', { class: 'tarefas' },
             d.paraHoje.map((t) => linhaTarefa(d, t)),
             simples.length > 1 ? el('button', { class: 'botao fantasma pequeno botao-todas', onclick: (e) => concluir(simples, e.currentTarget) }, ico('checks'), `Marcar as ${simples.length} ações como feitas`) : null)) : null,
-        el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Cronograma')), el('ul', { class: 'linha-tempo' }, itens)),
+        el('section', {},
+          el('div', { class: 'secao-titulo' }, el('span', {}, 'Cronograma'),
+            canceladas ? el('button', { class: 'link-mini', onclick: () => { estado.verCanceladas = !estado.verCanceladas; desenharFicha(d); } }, estado.verCanceladas ? 'Esconder canceladas' : `Mostrar canceladas (${canceladas})`) : null),
+          el('ul', { class: 'linha-tempo' }, itens)),
         el('details', { class: 'historico' },
           el('summary', {}, el('div', { class: 'secao-titulo' }, el('span', {}, `Histórico · ${d.historico.length}`))),
           el('ul', { class: 'historico-lista' }, d.historico.map((h) => el('li', {}, el('time', {}, dataCurta(h.data)), el('span', {}, `${h.por === 'sistema' ? 'Sistema' : h.por}: ${h.detalhes}`)))))));
@@ -395,6 +442,57 @@
       avisar('Cliente em dia. Indo para o próximo.');
       selecionar(proximo, true);
     } else desenharFichaVazia();
+  }
+
+  // ---------- Ajustar etapa (cliente tratado antes do sistema) ----------
+  let ajusteAtual = null;
+  function abrirAjuste(d) {
+    if (!garantirUsuario()) return;
+    ajusteAtual = d;
+    const f = $('#form-ajuste');
+    f.reset();
+    $('#ajuste-cliente').textContent = titulo(d.cliente.nome);
+    f.etapa.replaceChildren(...d.etapasAjustaveis.map((e) => el('option', { value: e.id }, e.nome)));
+    f.etapa.value = d.etapa && d.etapasAjustaveis.some((e) => e.id === d.etapa.id) ? d.etapa.id : d.etapasAjustaveis[0].id;
+    f.dataReferencia.max = hoje();
+    camposAjuste();
+    $('#janela-ajuste').showModal();
+  }
+  function camposAjuste() {
+    const f = $('#form-ajuste');
+    const etapa = ajusteAtual.etapasAjustaveis.find((e) => e.id === f.etapa.value);
+    const feitos = Number(f.contatosFeitos.value || 0);
+    $('#ajuste-avisos').hidden = etapa.tipo !== 'contatos';
+    f.contatosFeitos.max = String(etapa.tentativas || 0);
+    const precisaData = etapa.tipo === 'aguardo' || (etapa.tipo === 'contatos' && feitos > 0);
+    $('#ajuste-data').hidden = !precisaData;
+    f.dataReferencia.required = precisaData;
+    $('#ajuste-data-rotulo').textContent = etapa.tipo === 'aguardo' ? 'Data em que a espera começou (ex.: dia da negativação)' : 'Data em que o último aviso foi enviado';
+    $('#ajuste-efeito').textContent = etapa.tipo === 'contatos'
+      ? feitos > 0
+        ? `Os ${feitos} primeiros avisos ficam como feitos e os próximos são calculados a partir da data informada.`
+        : 'A etapa começa hoje, do 1º aviso.'
+      : etapa.tipo === 'aguardo' ? 'A pergunta "regularizou?" é marcada contando os dias a partir da data informada.' : 'As ações desta etapa ficam para hoje.';
+  }
+  async function enviarAjuste(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await api(`/api/processos/${ajusteAtual.id}/ajustar`, {
+        method: 'POST',
+        body: JSON.stringify({ por: estado.usuario, etapa: f.etapa.value, contatosFeitos: Number(f.contatosFeitos.value || 0), dataReferencia: f.dataReferencia.value || null, observacao: f.observacao.value }),
+      });
+      $('#janela-ajuste').close();
+      avisar('Etapa ajustada e cronograma recalculado');
+      await aposAcao();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
   }
 
   let decisaoAtual = null;
@@ -588,6 +686,9 @@
     estado.selecionado = null;
     recarregar();
   });
+  $('#form-ajuste').addEventListener('submit', enviarAjuste);
+  $('#form-ajuste').addEventListener('input', camposAjuste);
+  $('#ajuste-cancelar').addEventListener('click', () => $('#janela-ajuste').close());
   $('#form-decisao').addEventListener('submit', enviarDecisao);
   $('#form-decisao').addEventListener('change', efeitoDecisao);
   $('#decisao-cancelar').addEventListener('click', () => $('#janela-decisao').close());
@@ -617,8 +718,15 @@
     if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); selecionar(ordem[Math.max(0, i - 1)], true); }
   });
 
+  // Ao passar de celular para tela larga, abre o primeiro cliente da fila.
+  const telaLarga = matchMedia('(min-width: 901px)');
+  telaLarga.addEventListener('change', (e) => {
+    if (e.matches && estado.vista === 'hoje' && !estado.selecionado && (estado.ordemFila || []).length) selecionar(estado.ordemFila[0]);
+  });
+
   // ---------- Início ----------
   async function iniciar() {
+    desenharFichaVazia();
     $('#fila').replaceChildren(...Array.from({ length: 6 }, () => el('div', { class: 'esqueleto' })));
     try {
       const eu = await api('/api/eu');

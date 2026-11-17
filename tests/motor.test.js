@@ -91,3 +91,34 @@ test('agenda do dia mostra só o que vence até hoje e marca atrasadas', () => {
     ['2026-11-18', false],
   ]);
 });
+
+test('ajustar etapa: cliente que já recebeu 2 avisos antes do sistema', () => {
+  const { posicionar } = require('../src/cronograma/motor');
+  const p = novo('2026-11-17'); // tudo começaria hoje
+  posicionar(p, { etapaId: 'notificacao-negativacao', contatosFeitos: 2, dataReferencia: '2026-11-12', por: 'Jessica', data: '2026-11-17' }, cronograma);
+  const contatos = p.tarefas.filter((t) => t.etapa === 'notificacao-negativacao' && t.tipo === 'contato' && t.status !== 'cancelada');
+  // 1º aviso em 10/11 (2 dias úteis antes de 12/11), 2º em 12/11 (feitos); 3º em 14/11 -> cai em 16/11 (seg)
+  assert.deepStrictEqual(contatos.map((t) => [t.data, t.status]), [['2026-11-10', 'concluida'], ['2026-11-12', 'concluida'], ['2026-11-16', 'pendente']]);
+  // O 3º aviso já passou: aparece como atrasado hoje
+  assert.ok(agendaDoDia([p], '2026-11-17').some((i) => i.tarefa.data === '2026-11-16' && i.atrasada));
+  assert.ok(p.historico.some((h) => h.evento === 'etapa-ajustada'));
+});
+
+test('ajustar etapa: cliente já negativado, espera conta da data real', () => {
+  const { posicionar } = require('../src/cronograma/motor');
+  const p = novo('2026-11-17');
+  posicionar(p, { etapaId: 'aguardo-negativado', dataReferencia: '2026-11-05', por: 'Jessica', data: '2026-11-17' }, cronograma);
+  assert.strictEqual(p.etapaAtual, 'aguardo-negativado');
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-20']); // 05/11 + 15 dias
+  assert.strictEqual(datas(p, 'contato').length, 0); // avisos antigos cancelados
+});
+
+test('ajustar etapa: validações', () => {
+  const { posicionar } = require('../src/cronograma/motor');
+  const p = novo('2026-11-17');
+  const base = { por: 'Jessica', data: '2026-11-17' };
+  assert.throws(() => posicionar(p, { ...base, etapaId: 'notificacao-negativacao', contatosFeitos: 4, dataReferencia: '2026-11-10' }, cronograma), /de 0 a 3/);
+  assert.throws(() => posicionar(p, { ...base, etapaId: 'notificacao-negativacao', contatosFeitos: 1 }, cronograma), /data do último aviso/);
+  assert.throws(() => posicionar(p, { ...base, etapaId: 'aguardo-negativado', dataReferencia: '2026-12-01' }, cronograma), /futuro/);
+  assert.throws(() => posicionar(p, { ...base, etapaId: 'liberacao' }, cronograma), /Escolha uma etapa/);
+});

@@ -70,3 +70,8 @@ create table if not exists sgp_suspensoes (
   visto_desde   date not null,
   atualizado_em timestamptz not null default now()
 );
+
+-- Valor em aberto do contrato (atualizado a cada sincronização com o SGP).
+alter table processos add column if not exists valor_aberto numeric(12, 2);
+alter table processos add column if not exists faturas_abertas integer;
+alter table processos add column if not exists financeiro_em date;

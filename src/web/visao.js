@@ -19,6 +19,7 @@ function visaoProcesso(processo, hoje, cronograma) {
     status: processo.status,
     resultado: processo.resultado,
     finalizadoEm: processo.finalizadoEm || null,
+    financeiro: processo.financeiro || null,
     etapa: etapa ? { id: etapa.id, nome: etapa.nome, fase: etapa.fase, tipo: etapa.tipo } : null,
     faseIndice: etapa ? cronograma.fases.indexOf(etapa.fase) : -1,
     contatos: {
@@ -45,7 +46,7 @@ function painel(processos, hoje, cronograma) {
 
   const proximosDias = [];
   let dia = hoje;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
     dia = adicionarDiasUteis(dia, 1, feriados);
     const doDia = ativos.flatMap((p) => p.tarefas.filter((t) => t.status === 'pendente' && t.data === dia));
     proximosDias.push({
@@ -69,6 +70,7 @@ function painel(processos, hoje, cronograma) {
       clientesHoje: visoes.filter((v) => v.paraHoje.length).length,
       ativos: ativos.length,
       regularizados: processos.filter((p) => p.resultado === 'regularizado').length,
+      valorAberto: Math.round(ativos.reduce((s, p) => s + ((p.financeiro && p.financeiro.valorAberto) || 0), 0) * 100) / 100,
       cancelados: processos.filter((p) => p.resultado === 'cancelado').length,
     },
     clientes: visoes
@@ -76,6 +78,19 @@ function painel(processos, hoje, cronograma) {
       .sort((a, b) => prioridade(a) - prioridade(b) || a.cliente.nome.localeCompare(b.cliente.nome)),
     proximosDias,
   };
+}
+
+// Agenda de um dia (futuro ou hoje): clientes com tarefas marcadas para aquele dia.
+// Usa o mesmo formato da fila ("paraHoje" = tarefas daquele dia).
+function agendaDoDia(processos, dia, hoje, cronograma) {
+  return processos
+    .filter((p) => p.status === 'ativo')
+    .map((p) => {
+      const v = visaoProcesso(p, hoje, cronograma);
+      const doDia = p.tarefas.filter((t) => t.status === 'pendente' && t.data === dia).map((t) => ({ ...t, atrasada: false }));
+      return { ...v, paraHoje: doDia };
+    })
+    .filter((v) => v.paraHoje.length);
 }
 
 function listaProcessos(processos, hoje, cronograma) {
@@ -89,9 +104,10 @@ function detalheProcesso(processo, hoje, cronograma) {
   return {
     ...visaoProcesso(processo, hoje, cronograma),
     fases: cronograma.fases,
+    etapasAjustaveis: cronograma.etapas.filter((e) => ['contatos', 'aguardo', 'acao'].includes(e.tipo)).map((e) => ({ id: e.id, nome: e.nome, tipo: e.tipo, tentativas: e.tentativas || 0 })),
     tarefas: [...processo.tarefas].sort(porData).map((t) => ({ ...t, etapaNome: nomes[t.etapa] || t.etapa })),
     historico: [...processo.historico].reverse(),
   };
 }
 
-module.exports = { painel, listaProcessos, detalheProcesso, visaoProcesso };
+module.exports = { painel, agendaDoDia, listaProcessos, detalheProcesso, visaoProcesso };

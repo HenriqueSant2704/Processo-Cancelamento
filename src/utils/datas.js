@@ -41,6 +41,18 @@ function adicionarDiasUteis(iso, quantidade, feriados = []) {
   return dia;
 }
 
+// Volta N dias úteis (se o dia de partida não for útil, começa do dia útil anterior).
+function subtrairDiasUteis(iso, quantidade, feriados = []) {
+  let dia = iso;
+  while (!ehDiaUtil(dia, feriados)) dia = adicionarDias(dia, -1);
+  let restantes = quantidade;
+  while (restantes > 0) {
+    dia = adicionarDias(dia, -1);
+    if (ehDiaUtil(dia, feriados)) restantes--;
+  }
+  return dia;
+}
+
 function hojeISO(timeZone = process.env.TZ || 'America/Sao_Paulo', agora = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
 }
@@ -51,4 +63,4 @@ function formatarData(iso) {
   return `${dia}/${mes}/${ano} (${DIAS_SEMANA[paraData(iso).getUTCDay()]})`;
 }
 
-module.exports = { adicionarDias, diasEntre, ehDiaUtil, proximoDiaUtil, adicionarDiasUteis, hojeISO, formatarData };
+module.exports = { adicionarDias, diasEntre, ehDiaUtil, proximoDiaUtil, adicionarDiasUteis, subtrairDiasUteis, hojeISO, formatarData };

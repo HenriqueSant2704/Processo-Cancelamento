@@ -60,6 +60,9 @@ Depois acesse http://localhost:3000. Na tela:
 - **Próximos dias**: quantos clientes e contatos vêm nos próximos 5 dias úteis.
 - **Detalhe do cliente**: etapas do processo, cronograma completo e histórico.
 - **Todos os clientes**: em andamento e finalizados, com busca.
+- **Agenda por dia**: acima da fila, Hoje, Amanhã e os próximos dias úteis, com quantos clientes há em cada um.
+- **Valor em aberto** de cada contrato (faturas em aberto no SGP), atualizado a cada sincronização.
+- **Ajustar etapa**: para clientes já tratados antes do sistema; informa a etapa, quantos avisos já foram e a data real, e o cronograma é recalculado a partir dela.
 - No modo demonstração dá para **simular outro dia** para ver o cronograma andar.
 
 ## Banco no Neon

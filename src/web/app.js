@@ -6,6 +6,7 @@ const servico = require('../processos/servico');
 const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
+const { posicionar } = require('../cronograma/motor');
 const { criarSincronizador } = require('../processos/sincronizador');
 
 const PUBLICO = path.join(__dirname, 'publico');
@@ -182,6 +183,31 @@ function criarApp(opcoes) {
 
       if (req.method === 'GET' && url.pathname === '/api/painel') {
         return responderJson(res, 200, { ...visao.painel(await repositorio.listar(), hoje, cronograma), modoDemo, hojeReal: hojeISO() });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/agenda') {
+        const dia = url.searchParams.get('dia');
+        if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) throw new ErroHttp(400, 'Informe o dia (AAAA-MM-DD).');
+        return responderJson(res, 200, { dia, hoje, clientes: visao.agendaDoDia(await repositorio.listar(), dia, hoje, cronograma) });
+      }
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/ajustar$/))) {
+        const corpo = await lerCorpo(req);
+        const processo = await repositorio.obter(m[1]);
+        if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
+        try {
+          posicionar(processo, {
+            etapaId: String(corpo.etapa || ''),
+            contatosFeitos: Number(corpo.contatosFeitos || 0),
+            dataReferencia: corpo.dataReferencia || undefined,
+            observacao: typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : undefined,
+            por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
+            data: hoje,
+          }, cronograma);
+          await repositorio.salvarProcesso(processo);
+        } catch (erro) {
+          if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
+          throw new ErroHttp(400, erro.message);
+        }
+        return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
       }
       if (req.method === 'GET' && url.pathname === '/api/processos') {
         return responderJson(res, 200, { hoje, fases: cronograma.fases, processos: visao.listaProcessos(await repositorio.listar(), hoje, cronograma) });

@@ -38,11 +38,29 @@ o que foi feito ou o motivo. A resposta pode ser dada antes da data prevista
 **Tudo isso é configurável** em [`src/config/cronograma.json`](src/config/cronograma.json):
 quantidade de tentativas, intervalos, prazos, textos das tarefas e feriados.
 
+## Tela do financeiro
+
+```bash
+npm run demo     # abre a tela com clientes FICTÍCIOS (dados em data/demo, separados)
+npm run web      # abre a tela com os dados reais (data/processos.json)
+```
+
+Depois acesse http://localhost:3000. Na tela:
+
+- **Resumo do dia**: tarefas para hoje, atrasadas, perguntas "regularizou?" pendentes e clientes em acompanhamento.
+- **Lista de clientes de hoje**, com os atrasados primeiro, cada tarefa com o botão **Feito** e as decisões com **Sim** ou **Não** (a explicação é obrigatória).
+- **Próximos dias**: quantos clientes e contatos vêm nos próximos 5 dias úteis.
+- **Detalhe do cliente**: etapas do processo, cronograma completo e histórico.
+- **Todos os clientes**: em andamento e finalizados, com busca.
+- No modo demonstração dá para **simular outro dia** para ver o cronograma andar.
+
 ## Estrutura
 
 ```
 src/
-  index.js                 linha de comando (interface provisória)
+  index.js                 linha de comando
+  web/                     servidor da tela (app.js, visao.js) e a tela em si (publico/)
+  demo/                    gera clientes fictícios para demonstração
   config/                  variáveis de ambiente e cronograma.json
   cronograma/motor.js      gera as tarefas com as datas e avança as etapas
   processos/               regras de uso (sincronizar, agenda, concluir) e armazenamento

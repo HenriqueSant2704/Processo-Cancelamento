@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Têmis · Cobrança</title>
+  <link rel="icon" href="icone.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="lateral">
+      <div class="marca">
+        <img src="icone.svg" alt="" width="32" height="32">
+        <div>
+          <strong>Têmis</strong>
+          <span>Cobrança e cancelamento</span>
+        </div>
+      </div>
+      <nav class="menu">
+        <button class="menu-item ativo" data-vista="hoje">
+          <svg viewBox="0 0 24 24"><path d="M8 2v3M16 2v3M3.5 9h17M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z"/></svg>
+          <span>Hoje</span>
+          <em class="contador" id="contador-hoje"></em>
+        </button>
+        <button class="menu-item" data-vista="clientes">
+          <svg viewBox="0 0 24 24"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7"/></svg>
+          <span>Todos os clientes</span>
+        </button>
+      </nav>
+      <div class="lateral-rodape">
+        <div class="selo-demo" id="selo-demo" hidden>Modo demonstração<br><small>clientes fictícios</small></div>
+        <button class="usuario" id="botao-usuario" title="Trocar usuário">
+          <span class="avatar pequeno" id="usuario-iniciais">?</span>
+          <span><small>Conectado como</small><strong id="usuario-nome">—</strong></span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="conteudo">
+      <header class="topo">
+        <div>
+          <p class="sobretitulo" id="data-extenso"></p>
+          <h1 id="saudacao">Olá</h1>
+        </div>
+        <div class="topo-acoes">
+          <label class="simular" id="simular" hidden>
+            <span>Simular dia</span>
+            <input type="date" id="campo-data">
+          </label>
+          <button class="botao secundario" id="botao-sincronizar">
+            <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
+            Sincronizar SGP
+          </button>
+        </div>
+      </header>
+
+      <section id="vista-hoje" class="vista">
+        <div class="indicadores" id="indicadores"></div>
+
+        <div class="grade">
+          <div class="coluna-principal">
+            <div class="barra-filtros">
+              <div class="filtros" id="filtros" role="tablist"></div>
+              <label class="busca">
+                <svg viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>
+                <input type="search" id="busca" placeholder="Buscar cliente ou contrato">
+              </label>
+            </div>
+            <div id="lista-hoje" class="lista-cartoes"></div>
+          </div>
+
+          <aside class="coluna-lateral">
+            <div class="painel">
+              <h2>Próximos dias</h2>
+              <ol class="proximos" id="proximos"></ol>
+            </div>
+            <div class="painel">
+              <h2>Como ler as cores</h2>
+              <ul class="legenda">
+                <li><i class="ponto contato"></i>Contato com o cliente</li>
+                <li><i class="ponto acao"></i>Ação no SGP</li>
+                <li><i class="ponto decisao"></i>Pergunta "regularizou?"</li>
+                <li><i class="ponto atrasada"></i>Atrasada</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="vista-clientes" class="vista" hidden>
+        <div class="barra-filtros">
+          <div class="filtros" id="filtros-clientes"></div>
+          <label class="busca">
+            <svg viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>
+            <input type="search" id="busca-clientes" placeholder="Buscar cliente ou contrato">
+          </label>
+        </div>
+        <div class="tabela-wrap">
+          <table class="tabela">
+            <thead>
+              <tr><th>Cliente</th><th>Bloqueado há</th><th>Etapa</th><th>Próxima ação</th><th>Situação</th></tr>
+            </thead>
+            <tbody id="tabela-clientes"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Detalhe do cliente -->
+  <div class="gaveta-fundo" id="gaveta-fundo" hidden></div>
+  <aside class="gaveta" id="gaveta" aria-hidden="true" tabindex="-1">
+    <div id="gaveta-conteudo"></div>
+  </aside>
+
+  <!-- Janela de decisão / usuário -->
+  <dialog class="janela" id="janela-decisao">
+    <form method="dialog" id="form-decisao">
+      <p class="sobretitulo" id="decisao-cliente"></p>
+      <h3 id="decisao-pergunta"></h3>
+      <div class="escolha">
+        <label class="opcao sim"><input type="radio" name="resposta" value="sim" required><span>Sim, regularizou</span></label>
+        <label class="opcao nao"><input type="radio" name="resposta" value="nao" required><span>Não regularizou</span></label>
+      </div>
+      <label class="campo">
+        <span id="decisao-rotulo">O que foi feito? Por quê?</span>
+        <textarea name="observacao" rows="3" required placeholder="Ex.: Pagou via PIX hoje às 10h / Não atendeu as ligações"></textarea>
+      </label>
+      <p class="aviso-proximo" id="decisao-efeito"></p>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" value="cancelar" id="decisao-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="janela" id="janela-usuario">
+    <form method="dialog" id="form-usuario">
+      <h3>Quem está usando?</h3>
+      <p class="texto-suave">Seu nome fica registrado em cada tarefa que você concluir.</p>
+      <label class="campo">
+        <span>Seu nome</span>
+        <input name="nome" required maxlength="60" autocomplete="name" placeholder="Ex.: Jessica">
+      </label>
+      <div class="janela-acoes">
+        <button type="submit" class="botao primario">Entrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

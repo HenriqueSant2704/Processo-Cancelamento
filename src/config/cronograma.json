@@ -11,10 +11,19 @@
     "diasBloqueadoMinimo": 1
   },
   "inicio": "notificacao-negativacao",
+  "fases": [
+    "Notificação",
+    "Negativação",
+    "Negativado",
+    "Aviso de cancelamento",
+    "Cancelamento",
+    "Equipamentos"
+  ],
   "etapas": [
     {
       "id": "notificacao-negativacao",
       "nome": "Notificação de negativação",
+      "fase": "Notificação",
       "tipo": "contatos",
       "acoes": [
         "Abrir ocorrência de negativação no SGP"
@@ -32,6 +41,7 @@
     {
       "id": "liberacao",
       "nome": "Liberação do serviço",
+      "fase": "Regularização",
       "tipo": "final",
       "acoes": [
         "Liberar o serviço no SGP",
@@ -42,6 +52,7 @@
     {
       "id": "negativacao",
       "nome": "Negativação",
+      "fase": "Negativação",
       "tipo": "acao",
       "acoes": [
         "Negativar o cliente",
@@ -52,6 +63,7 @@
     {
       "id": "aguardo-negativado",
       "nome": "Aguardo após negativação",
+      "fase": "Negativado",
       "tipo": "aguardo",
       "dias": 15,
       "decisao": {
@@ -63,6 +75,7 @@
     {
       "id": "retirada-negativacao",
       "nome": "Retirada da negativação",
+      "fase": "Regularização",
       "tipo": "final",
       "acoes": [
         "Retirar a negativação",
@@ -74,6 +87,7 @@
     {
       "id": "aviso-cancelamento",
       "nome": "Aviso de cancelamento",
+      "fase": "Aviso de cancelamento",
       "tipo": "contatos",
       "acoes": [
         "Abrir ocorrência de cancelamento no SGP"
@@ -91,6 +105,7 @@
     {
       "id": "cancelamento",
       "nome": "Cancelamento do contrato",
+      "fase": "Cancelamento",
       "tipo": "acao",
       "acoes": [
         "Cancelar o contrato no SGP",
@@ -103,6 +118,7 @@
     {
       "id": "retirada-equipamentos",
       "nome": "Retirada de equipamentos",
+      "fase": "Equipamentos",
       "tipo": "aguardo",
       "dias": 30,
       "decisao": {
@@ -114,6 +130,7 @@
     {
       "id": "indenizacao",
       "nome": "Indenização de equipamentos",
+      "fase": "Equipamentos",
       "tipo": "acao",
       "acoes": [
         "Gerar cobrança de indenização dos equipamentos"
@@ -123,6 +140,7 @@
     {
       "id": "finalizacao-cancelamento",
       "nome": "Finalização do cancelamento",
+      "fase": "Equipamentos",
       "tipo": "final",
       "acoes": [
         "Classificar e finalizar o processo"

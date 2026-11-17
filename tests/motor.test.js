@@ -58,8 +58,8 @@ test('fluxo completo até o cancelamento', () => {
   decidir(p, 'nao', '2026-12-08');
 
   assert.strictEqual(p.etapaAtual, 'aviso-cancelamento');
-  assert.deepStrictEqual(datas(p, 'contato'), ['2026-12-08', '2026-12-09']);
-  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-11']); // um dia de pausa
+  assert.deepStrictEqual(datas(p, 'contato'), ['2026-12-08', '2026-12-10']); // dia sim, dia não
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-11']); // dia útil seguinte ao último aviso
   decidir(p, 'nao', '2026-12-11');
 
   assert.strictEqual(p.etapaAtual, 'cancelamento');

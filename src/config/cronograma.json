@@ -80,10 +80,10 @@
       ],
       "mensagem": "Enviar mensagem de aviso de cancelamento",
       "tentativas": 2,
-      "intervaloDiasUteis": 1,
+      "intervaloDiasUteis": 2,
       "decisao": {
         "pergunta": "O cliente regularizou a dívida antes do cancelamento?",
-        "diasUteisAposUltimoContato": 2,
+        "diasUteisAposUltimoContato": 1,
         "sim": "retirada-negativacao",
         "nao": "cancelamento"
       }

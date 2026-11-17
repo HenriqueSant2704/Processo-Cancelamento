@@ -21,8 +21,8 @@ Bloqueado há 1 dia
                       └─ aguardar 15 dias → Regularizou?
                            ├─ sim → retirar negativação, desbloquear, encerrar  (FIM: regularizado)
                            └─ não → aviso de cancelamento
-                                    abrir ocorrência + 2 contatos em dias úteis seguidos
-                                    + 1 dia útil de pausa → Regularizou?
+                                    abrir ocorrência + 2 contatos em dias úteis alternados
+                                    → no dia útil seguinte: Regularizou?
                                       ├─ sim → retirar negativação, desbloquear  (FIM: regularizado)
                                       └─ não → cancelar contrato, notificar, multa se houver
                                                fidelidade, abrir OS de retirada de equipamentos

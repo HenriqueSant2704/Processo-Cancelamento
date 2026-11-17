@@ -18,6 +18,14 @@ services:
       - key: TZ
         value: America/Sao_Paulo
       - key: SGP_MODO
-        value: exemplo           # troque para "api" quando a integração com o SGP existir
+        value: api
+      - key: SGP_URA_CLIENTES_URL
+        sync: false              # segredo: endereço da rota URA de clientes do SGP
+      - key: SGP_APP
+        sync: false
+      - key: SGP_TOKEN
+        sync: false
+      - key: SGP_HORA_SINCRONIZACAO
+        value: "7"
       - key: DATABASE_URL
         sync: false              # segredo: o Render pede o valor na criação (não fica no git)

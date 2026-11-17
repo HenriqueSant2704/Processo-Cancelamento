@@ -149,8 +149,14 @@ npm run cli -- sgp-diagnostico
 ```
 
 Se o SGP não mandar a data da suspensão, o sistema anota o **primeiro dia em que viu** o contrato
-suspenso (por isso a sincronização deve rodar todo dia). Na primeira sincronização de todas, quem já
-estava suspenso entra direto no processo.
+suspenso. Na prática o SGP não manda essa data, então o sistema usa o **vencimento da fatura em aberto
+mais antiga + 15 dias** (venceu dia 1, bloqueia dia 16, o processo começa dia 17), configurável em
+`SGP_DIAS_BLOQUEIO_APOS_VENCIMENTO`.
+
+**Sincronização:** com `SGP_MODO=api`, o servidor sincroniza sozinho uma vez por dia a partir das 7h
+(`SGP_HORA_SINCRONIZACAO`). O botão "Sincronizar SGP" também funciona e roda em segundo plano, porque a
+leitura completa do SGP leva vários minutos. No plano grátis do Render o serviço dorme; a sincronização
+do dia acontece no primeiro acesso depois das 7h.
 
 ## Segurança e LGPD
 

@@ -6,6 +6,7 @@ const servico = require('../processos/servico');
 const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
+const { criarSincronizador } = require('../processos/sincronizador');
 
 const PUBLICO = path.join(__dirname, 'publico');
 const TIPOS = {
@@ -112,10 +113,14 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
   };
 }
 
-// opcoes: { repositorio, usuarios (null = sem login), cronograma, criarSgp(hoje), modoDemo, cookieSeguro, atrasDeProxy }
+// opcoes: { repositorio, usuarios (null = sem login), cronograma, criarSgp(hoje), sincronizador, modoDemo, cookieSeguro, atrasDeProxy }
 function criarApp(opcoes) {
   const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false } = opcoes;
   const limitador = criarLimitador();
+  const sincronizador = opcoes.sincronizador || criarSincronizador({
+    executar: (dia) => servico.sincronizar({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
+    hoje: hojeISO,
+  });
   const ipDe = (req) => (atrasDeProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress;
   const cookieSessao = (valor, segundos) =>
     `${COOKIE}=${encodeURIComponent(valor)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${segundos}${cookieSeguro ? '; Secure' : ''}`;
@@ -186,17 +191,15 @@ function criarApp(opcoes) {
         if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
         return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
       }
+      // Sincronizar só dispara, em segundo plano (a leitura do SGP pode levar minutos);
+      // a tela acompanha pelo GET /api/sincronizacao.
       if (req.method === 'POST' && url.pathname === '/api/sincronizar') {
         await lerCorpo(req);
-        let resultado;
-        try {
-          resultado = await servico.sincronizar({ sgp: criarSgp(hoje), repositorio, cronograma, hoje });
-        } catch (erro) {
-          console.error(erro);
-          throw new ErroHttp(502, `Não foi possível sincronizar com o SGP. ${erro.message}`);
-        }
-        const { totalBloqueados, novos } = resultado;
-        return responderJson(res, 200, { totalBloqueados, novos: novos.map((p) => ({ id: p.id, nome: p.cliente.nome })) });
+        sincronizador.rodar(usuario ? `manual (${usuario.nome})` : 'manual', modoDemo && dataParam ? hoje : null);
+        return responderJson(res, 202, sincronizador.status());
+      }
+      if (req.method === 'GET' && url.pathname === '/api/sincronizacao') {
+        return responderJson(res, 200, sincronizador.status());
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
         const corpo = await lerCorpo(req);

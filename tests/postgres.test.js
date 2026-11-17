@@ -98,6 +98,7 @@ test('login: usuário, senha, sessão e proteção da tela', async (t) => {
 
   assert.strictEqual((await (await fetch(base + '/api/eu', { headers: { Cookie: cookie } })).json()).nome, 'Jessica Silva');
   await fetch(base + '/api/sincronizar', { method: 'POST', headers: { ...json, Cookie: cookie }, body: '{}' });
+  for (let s = { emAndamento: true }; s.emAndamento; ) s = await (await fetch(base + '/api/sincronizacao', { headers: { Cookie: cookie } })).json();
   const painel = await (await fetch(base + '/api/painel', { headers: { Cookie: cookie } })).json();
   const tarefa = painel.clientes[0].paraHoje[0];
 

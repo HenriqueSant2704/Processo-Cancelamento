@@ -32,7 +32,12 @@ test('API da tela (modo demonstração, sem login): sincronizar, painel, conclui
   const { base, chamar } = subir(t, { repositorio: new RepositorioJson(null), modoDemo: true });
   const d = '?data=2026-11-16';
 
-  assert.strictEqual((await chamar('/api/sincronizar' + d, {})).json.novos.length, 2);
+  const disparo = await chamar('/api/sincronizar' + d, {});
+  assert.strictEqual(disparo.status, 202); // roda em segundo plano
+  let status = disparo.json;
+  while (status.emAndamento) status = (await chamar('/api/sincronizacao')).json;
+  assert.strictEqual(status.ultima.ok, true);
+  assert.strictEqual(status.ultima.novos.length, 2);
 
   const painel = (await chamar('/api/painel' + d)).json;
   assert.strictEqual(painel.resumo.clientesHoje, 2);

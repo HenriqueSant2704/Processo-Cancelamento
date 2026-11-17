@@ -221,6 +221,12 @@
       acoes);
   }
 
+  // "Suspenso há X dias", com cor pelo tempo: até 15 dias, 16 a 30 e mais de 30.
+  function seloSuspenso(dias) {
+    const nivel = dias > 30 ? 'critico' : dias > 15 ? 'alto' : '';
+    return el('span', { class: `dias-suspenso ${nivel}`, title: 'Dias desde o bloqueio no SGP' }, `Suspenso há ${plural(dias, 'dia', 'dias')}`);
+  }
+
   function cartaoCliente(cliente, fases) {
     const tarefas = cliente.paraHoje.filter(tarefaPassaFiltro);
     const atrasado = cliente.paraHoje.some((t) => t.atrasada);
@@ -232,7 +238,7 @@
           el('div', { class: 'meta' },
             el('span', {}, `Contrato ${cliente.cliente.contrato}`),
             el('span', { class: 'sep' }, '•'),
-            el('span', {}, `bloqueado há ${plural(cliente.diasBloqueado, 'dia', 'dias')}`))),
+            seloSuspenso(cliente.diasBloqueado))),
         atrasado ? el('span', { class: 'selo atrasada' }, icone('alerta'), 'Atrasado') : el('span', { class: 'selo' }, cliente.etapa.fase)),
       trilha(cliente, fases),
       el('div', { class: 'tarefas' }, tarefas.map((t) => linhaTarefa(cliente, t))),
@@ -317,7 +323,7 @@
         el('td', {}, el('div', { class: 'cliente-celula' },
           el('span', { class: 'avatar pequeno' }, iniciais(c.cliente.nome)),
           el('div', {}, el('strong', {}, c.cliente.nome), el('small', {}, `Contrato ${c.cliente.contrato}`)))),
-        el('td', {}, c.status === 'ativo' ? plural(c.diasBloqueado, 'dia', 'dias') : el('span', { class: 'suave' }, '—')),
+        el('td', {}, c.status === 'ativo' ? seloSuspenso(c.diasBloqueado) : el('span', { class: 'suave' }, '—')),
         el('td', {}, c.etapa ? c.etapa.nome : el('span', { class: 'suave' }, 'Encerrado')),
         el('td', {}, proxima ? el('div', {}, el('div', {}, proxima.descricao), el('small', { class: 'suave' }, dataCurta(proxima.data))) : el('span', { class: 'suave' }, '—')),
         el('td', {}, situacao(c)));
@@ -394,7 +400,7 @@
       el('div', { class: 'gaveta-corpo' },
         el('div', { class: 'dados' },
           el('div', { class: 'dado' }, el('small', {}, 'Bloqueado em'), el('strong', {}, dataCurta(d.bloqueadoEm))),
-          el('div', { class: 'dado' }, el('small', {}, finalizado ? 'Finalizado em' : 'Bloqueado há'), el('strong', {}, finalizado ? dataCurta(d.finalizadoEm) : plural(d.diasBloqueado, 'dia', 'dias'))),
+          el('div', { class: 'dado' }, el('small', {}, finalizado ? 'Finalizado em' : 'Suspenso há'), el('strong', {}, finalizado ? dataCurta(d.finalizadoEm) : plural(d.diasBloqueado, 'dia', 'dias'))),
           el('div', { class: 'dado' }, el('small', {}, 'Situação'), resultado)),
         d.paraHoje.length ? el('section', {},
           el('h3', {}, 'Para fazer agora'),
@@ -477,19 +483,51 @@
     }
   }
 
-  async function sincronizar() {
+  // A sincronização roda no servidor, em segundo plano (a leitura do SGP leva minutos).
+  // Aqui só disparamos e acompanhamos a cada poucos segundos.
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function desenharSincronizacao(status) {
     const botao = $('#botao-sincronizar');
-    botao.disabled = true;
-    botao.classList.add('girando');
+    const rotulo = $('#rotulo-sincronizar');
+    botao.disabled = status.emAndamento;
+    botao.classList.toggle('girando', status.emAndamento);
+    rotulo.textContent = status.emAndamento ? 'Sincronizando…' : 'Sincronizar SGP';
+    const u = status.ultima;
+    const info = $('#ultima-sincronizacao');
+    if (status.emAndamento) info.textContent = 'Lendo o SGP, pode levar alguns minutos…';
+    else if (!u) info.textContent = '';
+    else if (!u.ok) info.textContent = `Última sincronização falhou: ${u.erro}`;
+    else {
+      const hora = new Date(u.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      info.textContent = `SGP sincronizado ${u.dia === hoje() ? 'hoje' : dataCurta(u.dia)} às ${hora} · ${plural(u.total, 'suspenso', 'suspensos')}`;
+    }
+    info.classList.toggle('erro', Boolean(u && !u.ok && !status.emAndamento));
+  }
+
+  async function acompanharSincronizacao(avisarFim) {
+    let status = await api('/api/sincronizacao');
+    desenharSincronizacao(status);
+    while (status.emAndamento) {
+      await esperar(4000);
+      status = await api('/api/sincronizacao');
+      desenharSincronizacao(status);
+    }
+    if (avisarFim && status.ultima) {
+      if (status.ultima.ok) {
+        const n = status.ultima.novos.length;
+        avisar(n ? `${plural(n, 'novo cliente entrou', 'novos clientes entraram')} no processo` : 'Nenhum cliente novo no SGP');
+      } else avisar(status.ultima.erro, 'erro');
+    }
+    await recarregar();
+  }
+
+  async function sincronizar() {
     try {
-      const r = await api('/api/sincronizar', { method: 'POST' });
-      avisar(r.novos.length ? `${plural(r.novos.length, 'novo cliente entrou', 'novos clientes entraram')} no processo` : 'Nenhum cliente novo no SGP');
-      await recarregar();
+      desenharSincronizacao(await api('/api/sincronizar', { method: 'POST' }));
+      await acompanharSincronizacao(true);
     } catch (erro) {
       avisar(erro.message, 'erro');
-    } finally {
-      botao.disabled = false;
-      botao.classList.remove('girando');
     }
   }
 
@@ -586,6 +624,8 @@
     desenharUsuario();
     await carregarPainel();
     if (!estado.usuario) abrirUsuario();
+    // Mostra quando foi a última sincronização (e acompanha, se houver uma rodando agora).
+    acompanharSincronizacao(false).catch(() => {});
   }
   iniciar();
 })();

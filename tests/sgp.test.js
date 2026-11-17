@@ -129,3 +129,25 @@ test('sem campo de data: bloqueio = fatura em aberto mais antiga do contrato + 1
   // Sem fatura em aberto: sem data (o sistema usa o 1º dia em que viu suspenso)
   assert.strictEqual(contratosSuspensos([cliente(2, [contrato(20, 'SUSPENSO')])])[0].dataSuspensao, null);
 });
+
+test('sincronizador: uma rodada por vez, guarda o resultado e a agenda diária', async () => {
+  const { criarSincronizador } = require('../src/processos/sincronizador');
+  let chamadas = 0;
+  let liberar;
+  const s = criarSincronizador({
+    executar: () => { chamadas++; return new Promise((r) => { liberar = () => r({ totalBloqueados: 3, novos: [{ cliente: { nome: 'A' } }] }); }); },
+    hoje: () => '2026-11-17',
+    horaInicio: 0,
+  });
+  const p1 = s.rodar();
+  const p2 = s.rodar(); // não abre uma segunda
+  assert.strictEqual(chamadas, 1);
+  assert.strictEqual(s.status().emAndamento, true);
+  liberar();
+  await Promise.all([p1, p2]);
+  assert.deepStrictEqual(s.status().ultima.novos, ['A']);
+  // A agenda não roda de novo no mesmo dia em que já sincronizou.
+  const parar = s.iniciarAgenda();
+  assert.strictEqual(chamadas, 1);
+  parar();
+});

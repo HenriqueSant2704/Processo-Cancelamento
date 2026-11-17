@@ -6,6 +6,9 @@ const config = require('../config');
 const { criarApp } = require('./app');
 const { criarFonteSgp } = require('../integracoes/sgp');
 const { criarArmazenamento } = require('../armazenamento');
+const { criarSincronizador } = require('../processos/sincronizador');
+const servico = require('../processos/servico');
+const { hojeISO } = require('../utils/datas');
 
 const LOCAL = new Set(['127.0.0.1', 'localhost', '::1']);
 
@@ -19,11 +22,25 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   }
 
   const producao = config.ambiente === 'production';
+  const cronograma = config.carregarCronograma();
+  const criarSgp = (hoje) => criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' });
+  const sincronizador = criarSincronizador({
+    executar: (dia) => servico.sincronizar({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia }),
+    hoje: hojeISO,
+    horaInicio: config.sgp.horaSincronizacao,
+  });
+  // Com o SGP real, sincroniza sozinho uma vez por dia (a partir de SGP_HORA_SINCRONIZACAO, padrão 7h).
+  if (!modoDemo && config.sgp.modo === 'api' && config.sgp.sincronizacaoAutomatica) {
+    sincronizador.iniciarAgenda();
+    console.log(`Sincronização automática com o SGP: todo dia a partir das ${config.sgp.horaSincronizacao}h.`);
+  }
+
   const app = criarApp({
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
-    cronograma: config.carregarCronograma(),
-    criarSgp: (hoje) => criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' }),
+    cronograma,
+    criarSgp,
+    sincronizador,
     modoDemo,
     cookieSeguro: producao,
     atrasDeProxy: producao,

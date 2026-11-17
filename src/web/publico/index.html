@@ -53,9 +53,10 @@
           </label>
           <button class="botao secundario" id="botao-sincronizar">
             <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
-            Sincronizar SGP
+            <span id="rotulo-sincronizar">Sincronizar SGP</span>
           </button>
         </div>
+        <p class="ultima-sincronizacao" id="ultima-sincronizacao" aria-live="polite"></p>
       </header>
 
       <section id="vista-hoje" class="vista">
@@ -102,7 +103,7 @@
         <div class="tabela-wrap">
           <table class="tabela">
             <thead>
-              <tr><th>Cliente</th><th>Bloqueado há</th><th>Etapa</th><th>Próxima ação</th><th>Situação</th></tr>
+              <tr><th>Cliente</th><th>Suspenso há</th><th>Etapa</th><th>Próxima ação</th><th>Situação</th></tr>
             </thead>
             <tbody id="tabela-clientes"></tbody>
           </table>

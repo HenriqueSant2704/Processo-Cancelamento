@@ -1,27 +1,48 @@
-// Inicia a tela no navegador: npm run web  (abre em http://localhost:3000)
+// Inicia a tela no navegador: npm run web
+//   Local (sem DATABASE_URL): dados no arquivo data/processos.json, sem login, só neste computador.
+//   Render (com DATABASE_URL): dados no Neon, com login dos funcionários.
 const http = require('node:http');
 const config = require('../config');
 const { criarApp } = require('./app');
 const { criarFonteSgp } = require('../integracoes/sgp');
+const { criarArmazenamento } = require('../armazenamento');
 
-function iniciarServidor({ arquivoDados = config.arquivoDados, modoDemo = false } = {}) {
+const LOCAL = new Set(['127.0.0.1', 'localhost', '::1']);
+
+async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
+  const armazenamento = await criarArmazenamento({ arquivoDados, forcarArquivo: modoDemo });
+  const { host, porta } = config.web;
+
+  // Segurança (LGPD): nunca abrir para a rede sem login.
+  if (!armazenamento.usuarios && !LOCAL.has(host)) {
+    throw new Error(`Recusado: HOST=${host} deixaria a tela aberta na rede sem login. Configure DATABASE_URL (Neon) para ter login.`);
+  }
+
+  const producao = config.ambiente === 'production';
   const app = criarApp({
-    arquivoDados,
+    repositorio: armazenamento.repositorio,
+    usuarios: armazenamento.usuarios,
     cronograma: config.carregarCronograma(),
     criarSgp: (hoje) => criarFonteSgp(config, hoje),
     modoDemo,
+    cookieSeguro: producao,
+    atrasDeProxy: producao,
   });
-  // Por padrão só aceita acessos deste computador (HOST=127.0.0.1).
-  // Liberar para a rede (HOST=0.0.0.0) só depois de termos login, por causa da LGPD.
-  const host = process.env.HOST || '127.0.0.1';
-  const porta = Number(process.env.PORT) || 3000;
+
   const servidor = http.createServer(app);
   servidor.listen(porta, host, () => {
-    console.log(`Tela do financeiro: http://localhost:${porta}${modoDemo ? '  (modo demonstração)' : ''}`);
+    const extra = modoDemo ? '  (modo demonstração)' : armazenamento.usuarios ? '  (banco Neon, com login)' : '  (arquivo local, sem login)';
+    console.log(`Tela do financeiro: http://localhost:${porta}${extra}`);
   });
+  servidor.on('close', () => armazenamento.fechar());
   return servidor;
 }
 
-if (require.main === module) iniciarServidor();
+if (require.main === module) {
+  iniciarServidor().catch((erro) => {
+    console.error(`Erro ao iniciar: ${erro.message}`);
+    process.exit(1);
+  });
+}
 
 module.exports = { iniciarServidor };

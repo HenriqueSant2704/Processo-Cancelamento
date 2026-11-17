@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar · Têmis</title>
+  <link rel="icon" href="icone.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body class="pagina-login">
+  <main class="login">
+    <div class="login-marca">
+      <img src="icone.svg" alt="" width="44" height="44">
+      <div>
+        <strong>Têmis</strong>
+        <span>Cobrança e cancelamento</span>
+      </div>
+    </div>
+    <form id="form-login" class="login-cartao" novalidate>
+      <h1>Entrar</h1>
+      <p class="texto-suave">Use o login e a senha que você recebeu.</p>
+      <label class="campo">
+        <span>Login</span>
+        <input name="login" autocomplete="username" required autofocus autocapitalize="none" spellcheck="false">
+      </label>
+      <label class="campo">
+        <span>Senha</span>
+        <input name="senha" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="login-erro" id="login-erro" role="alert"></p>
+      <button class="botao primario grande" type="submit">Entrar</button>
+    </form>
+  </main>
+  <script src="login.js"></script>
+</body>
+</html>

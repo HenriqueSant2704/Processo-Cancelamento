@@ -74,7 +74,7 @@ function semear(arquivo, hoje) {
     const processo = montarCenario({ ...cenario, id, cliente }, hoje, cronograma);
     if (processo) {
       repositorio.dados.ultimoId = Number(id);
-      repositorio.adicionar(processo);
+      repositorio.dados.processos.push(processo);
     }
   });
 
@@ -93,17 +93,20 @@ function semear(arquivo, hoje) {
     concluirTarefa(regularizado, t.id, { por: 'Jessica', data: adicionarDias(hoje, -6) }, cronograma);
   }
   repositorio.dados.ultimoId = Number(id);
-  repositorio.adicionar(regularizado);
+  repositorio.dados.processos.push(regularizado);
 
-  repositorio.salvar();
-  return repositorio.listar().length;
+  repositorio.gravarArquivo();
+  return repositorio.dados.processos.length;
 }
 
 if (require.main === module) {
   const arquivo = path.join(path.dirname(config.arquivoDados), 'demo', 'processos.json');
   const total = semear(arquivo, hojeISO());
   console.log(`Demonstração: ${total} clientes fictícios criados em ${arquivo}`);
-  iniciarServidor({ arquivoDados: arquivo, modoDemo: true });
+  iniciarServidor({ arquivoDados: arquivo, modoDemo: true }).catch((erro) => {
+    console.error(`Erro ao iniciar: ${erro.message}`);
+    process.exit(1);
+  });
 }
 
 module.exports = { semear };

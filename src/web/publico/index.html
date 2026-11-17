@@ -152,6 +152,28 @@
     </form>
   </dialog>
 
+  <dialog class="janela" id="janela-senha">
+    <form method="dialog" id="form-senha">
+      <h3>Trocar senha</h3>
+      <label class="campo">
+        <span>Senha atual</span>
+        <input name="senhaAtual" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="campo">
+        <span>Nova senha (mínimo 8 caracteres)</span>
+        <input name="novaSenha" type="password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label class="campo">
+        <span>Confirme a nova senha</span>
+        <input name="confirmar" type="password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="senha-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="avisos" id="avisos" aria-live="polite"></div>
 
   <script src="app.js"></script>

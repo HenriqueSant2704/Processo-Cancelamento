@@ -14,6 +14,7 @@
     processos: null,
     abertoId: null,
     usuario: lerLocal('temis.usuario') || '',
+    comLogin: false, // true quando o servidor exige login (banco Neon)
   };
 
   function lerLocal(chave) {
@@ -84,10 +85,16 @@
   async function api(caminho, opcoes = {}) {
     const url = new URL(caminho, location.origin);
     if (estado.data) url.searchParams.set('data', estado.data);
+    const post = opcoes.method === 'POST';
     const resposta = await fetch(url, {
       ...opcoes,
-      headers: opcoes.body ? { 'Content-Type': 'application/json' } : undefined,
+      body: post ? opcoes.body || '{}' : undefined,
+      headers: post ? { 'Content-Type': 'application/json' } : undefined,
     });
+    if (resposta.status === 401 && estado.comLogin) {
+      location.replace('/login.html');
+      throw new Error('Sessão expirada. Entre de novo.');
+    }
     const corpo = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(corpo.erro || 'Não foi possível falar com o servidor.');
     return corpo;
@@ -487,9 +494,41 @@
   }
 
   function abrirUsuario() {
+    if (estado.comLogin) return alternarMenuUsuario();
     const form = $('#form-usuario');
     form.nome.value = estado.usuario;
     $('#janela-usuario').showModal();
+  }
+
+  // Menu "Trocar senha / Sair" (só quando há login).
+  function alternarMenuUsuario() {
+    const existente = document.querySelector('.menu-usuario');
+    if (existente) return existente.remove();
+    const menu = el('div', { class: 'menu-usuario', role: 'menu' },
+      el('button', { role: 'menuitem', onclick: () => { menu.remove(); $('#form-senha').reset(); $('#janela-senha').showModal(); } }, 'Trocar senha'),
+      el('button', { role: 'menuitem', onclick: sair }, 'Sair'));
+    $('.lateral-rodape').append(menu);
+    setTimeout(() => document.addEventListener('click', function fechar(e) {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', fechar); }
+    }), 0);
+  }
+
+  async function sair() {
+    await api('/api/sair', { method: 'POST' }).catch(() => {});
+    location.replace('/login.html');
+  }
+
+  async function trocarSenha(evento) {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    if (form.novaSenha.value !== form.confirmar.value) return avisar('A confirmação não confere com a nova senha.', 'erro');
+    try {
+      await api('/api/senha', { method: 'POST', body: JSON.stringify({ senhaAtual: form.senhaAtual.value, novaSenha: form.novaSenha.value }) });
+      $('#janela-senha').close();
+      avisar('Senha alterada');
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    }
   }
 
   function desenharUsuario() {
@@ -533,7 +572,20 @@
   });
 
   // ---------- Início ----------
-  $('#lista-hoje').replaceChildren(el('div', { class: 'esqueleto' }), el('div', { class: 'esqueleto' }));
-  desenharUsuario();
-  carregarPainel().then(() => { if (!estado.usuario) abrirUsuario(); });
+  $('#form-senha').addEventListener('submit', trocarSenha);
+  $('#senha-cancelar').addEventListener('click', () => $('#janela-senha').close());
+
+  async function iniciar() {
+    $('#lista-hoje').replaceChildren(el('div', { class: 'esqueleto' }), el('div', { class: 'esqueleto' }));
+    try {
+      const eu = await api('/api/eu');
+      estado.comLogin = eu.comLogin;
+      if (eu.comLogin) estado.usuario = eu.nome;
+    } catch { /* segue sem login */ }
+    $('#botao-usuario').title = estado.comLogin ? 'Trocar senha ou sair' : 'Trocar usuário';
+    desenharUsuario();
+    await carregarPainel();
+    if (!estado.usuario) abrirUsuario();
+  }
+  iniciar();
 })();

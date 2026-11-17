@@ -1,16 +1,21 @@
-// Linha de comando do sistema (interface provisória até termos a tela web).
+// Linha de comando do sistema.
 //   npm start                         -> agenda de hoje (quem contatar e o que fazer)
 //   npm run sincronizar               -> busca os bloqueados no SGP e abre os processos
-//   node src/index.js processos       -> lista os processos ativos
-//   node src/index.js processo <id>   -> cronograma e histórico de um cliente
-//   node src/index.js concluir <tarefa> --por Jessica [--obs "texto"]
-//   node src/index.js decidir <tarefa> sim|nao --por Jessica --obs "o que foi feito / por quê"
+//   npm run cli -- processos          -> lista os processos ativos
+//   npm run cli -- processo <id>      -> cronograma e histórico de um cliente
+//   npm run cli -- concluir <tarefa> --por Jessica [--obs "texto"]
+//   npm run cli -- decidir <tarefa> sim|nao --por Jessica --obs "o que foi feito / por quê"
+// Usuários (só com o banco Neon configurado em DATABASE_URL):
+//   npm run cli -- criar-usuario <login> --nome "Jessica Silva"   (mostra uma senha temporária)
+//   npm run cli -- redefinir-senha <login>
+//   npm run cli -- desativar-usuario <login>
+//   npm run cli -- usuarios
 // Opção --data AAAA-MM-DD simula outro dia (padrão: hoje).
 const { parseArgs } = require('node:util');
 const config = require('./config');
-const { RepositorioJson } = require('./processos/repositorio');
 const servico = require('./processos/servico');
 const { criarFonteSgp } = require('./integracoes/sgp');
+const { criarArmazenamento } = require('./armazenamento');
 const { hojeISO, formatarData } = require('./utils/datas');
 
 const ROTULOS = { contato: 'CONTATO', acao: 'AÇÃO', decisao: 'DECISÃO' };
@@ -31,8 +36,8 @@ function imprimirAgenda(itens, hoje) {
     const atraso = atrasada ? `  [ATRASADA, era ${formatarData(tarefa.data)}]` : '';
     console.log(`  [${tarefa.id}] ${ROTULOS[tarefa.tipo]}: ${tarefa.descricao}${atraso}`);
   }
-  console.log('\nPara concluir:  node src/index.js concluir <tarefa> --por <seu nome>');
-  console.log('Para decidir:   node src/index.js decidir <tarefa> sim|nao --por <seu nome> --obs "o que foi feito"');
+  console.log('\nPara concluir:  npm run cli -- concluir <tarefa> --por <seu nome>');
+  console.log('Para decidir:   npm run cli -- decidir <tarefa> sim|nao --por <seu nome> --obs "o que foi feito"');
 }
 
 function imprimirProcesso(processo) {
@@ -46,42 +51,40 @@ function imprimirProcesso(processo) {
   }
 }
 
-async function main() {
-  const { values, positionals } = parseArgs({
-    allowPositionals: true,
-    options: { data: { type: 'string' }, por: { type: 'string' }, obs: { type: 'string' } },
-  });
-  const [comando = 'agenda', ...args] = positionals;
+function exigirUsuarios(armazenamento) {
+  if (!armazenamento.usuarios) throw new Error('Usuários só existem com o banco Neon. Configure DATABASE_URL no arquivo .env.');
+  return armazenamento.usuarios;
+}
+
+async function executar(comando, args, values, armazenamento) {
   const hoje = values.data || hojeISO();
   const cronograma = config.carregarCronograma();
-  const repositorio = new RepositorioJson(config.arquivoDados);
+  const { repositorio } = armazenamento;
 
   switch (comando) {
     case 'agenda':
-      imprimirAgenda(servico.agenda({ repositorio, hoje }), hoje);
-      break;
+      return imprimirAgenda(await servico.agenda({ repositorio, hoje }), hoje);
     case 'sincronizar': {
       const sgp = criarFonteSgp(config, hoje);
       const { totalBloqueados, novos } = await servico.sincronizar({ sgp, repositorio, cronograma, hoje });
       console.log(`SGP: ${totalBloqueados} cliente(s) bloqueado(s). ${novos.length} novo(s) processo(s) aberto(s).`);
       for (const p of novos) console.log(`  processo ${p.id}: ${p.cliente.nome}`);
-      break;
+      return;
     }
     case 'processos':
-      for (const p of repositorio.listar().filter((p) => p.status === 'ativo')) {
+      for (const p of (await repositorio.listar()).filter((p) => p.status === 'ativo')) {
         console.log(`  ${p.id}  ${p.cliente.nome.padEnd(30)} etapa: ${p.etapaAtual}`);
       }
-      break;
+      return;
     case 'processo': {
-      const processo = repositorio.obter(args[0]);
+      const processo = await repositorio.obter(args[0]);
       if (!processo) throw new Error(`Processo ${args[0]} não encontrado.`);
-      imprimirProcesso(processo);
-      break;
+      return imprimirProcesso(processo);
     }
     case 'concluir':
     case 'decidir': {
       const [tarefaId, resposta] = args;
-      const { processo, tarefa } = servico.concluir({
+      const { processo, tarefa } = await servico.concluir({
         repositorio,
         cronograma,
         tarefaId,
@@ -91,11 +94,44 @@ async function main() {
         resposta: comando === 'decidir' ? resposta : undefined,
       });
       console.log(`Tarefa ${tarefa.id} concluída.`);
-      imprimirProcesso(processo);
-      break;
+      return imprimirProcesso(processo);
     }
+    case 'criar-usuario': {
+      const { login, senha } = await exigirUsuarios(armazenamento).criar({ login: args[0], nome: values.nome });
+      console.log(`Usuário "${login}" criado.\nSenha temporária: ${senha}\nPasse para a pessoa por um canal privado; ela pode trocar a senha na tela.`);
+      return;
+    }
+    case 'redefinir-senha': {
+      const { login, senha } = await exigirUsuarios(armazenamento).redefinirSenha(args[0]);
+      console.log(`Nova senha temporária de "${login}": ${senha}`);
+      return;
+    }
+    case 'desativar-usuario':
+      await exigirUsuarios(armazenamento).desativar(args[0]);
+      console.log(`Usuário "${args[0]}" desativado.`);
+      return;
+    case 'usuarios':
+      for (const u of await exigirUsuarios(armazenamento).listar()) console.log(`  ${u.login.padEnd(20)} ${u.nome}${u.ativo ? '' : '  (desativado)'}`);
+      return;
+    case 'migrar':
+      console.log(armazenamento.tipo === 'postgres' ? 'Banco Neon atualizado.' : 'Sem DATABASE_URL: nada a migrar (usando arquivo local).');
+      return;
     default:
       throw new Error(`Comando desconhecido: ${comando}`);
+  }
+}
+
+async function main() {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: { data: { type: 'string' }, por: { type: 'string' }, obs: { type: 'string' }, nome: { type: 'string' } },
+  });
+  const [comando = 'agenda', ...args] = positionals;
+  const armazenamento = await criarArmazenamento();
+  try {
+    await executar(comando, args, values, armazenamento);
+  } finally {
+    await armazenamento.fechar();
   }
 }
 

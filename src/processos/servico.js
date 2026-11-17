@@ -11,31 +11,30 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
 
   for (const cliente of bloqueados) {
     if (diasEntre(cliente.bloqueadoEm, hoje) < minimo) continue;
-    if (repositorio.processoAtivoDoCliente(cliente.id)) continue;
+    if (await repositorio.processoAtivoDoCliente(cliente.id)) continue;
     const processo = criarProcesso({
-      id: repositorio.proximoId(),
+      id: await repositorio.proximoId(),
       cliente: { id: String(cliente.id), nome: cliente.nome, contrato: cliente.contrato },
       bloqueadoEm: cliente.bloqueadoEm,
       inicio: hoje,
       cronograma,
     });
-    repositorio.adicionar(processo);
+    await repositorio.salvarProcesso(processo);
     novos.push(processo);
   }
 
-  repositorio.salvar();
   return { totalBloqueados: bloqueados.length, novos };
 }
 
-function agenda({ repositorio, hoje }) {
-  return agendaDoDia(repositorio.listar(), hoje);
+async function agenda({ repositorio, hoje }) {
+  return agendaDoDia(await repositorio.listar(), hoje);
 }
 
-function concluir({ repositorio, cronograma, tarefaId, por, data, observacao, resposta }) {
-  const processo = repositorio.obterPorTarefa(tarefaId);
+async function concluir({ repositorio, cronograma, tarefaId, por, data, observacao, resposta }) {
+  const processo = await repositorio.obterPorTarefa(tarefaId);
   if (!processo) throw new Error(`Tarefa ${tarefaId} não encontrada.`);
   const tarefa = concluirTarefa(processo, tarefaId, { por, data, observacao, resposta }, cronograma);
-  repositorio.salvar();
+  await repositorio.salvarProcesso(processo);
   return { processo, tarefa };
 }
 

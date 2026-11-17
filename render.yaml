@@ -1,0 +1,23 @@
+# Publicação no Render (Blueprint). No painel do Render: New > Blueprint > escolha este repositório.
+# O banco fica no Neon: cole a "connection string" do Neon em DATABASE_URL quando o Render pedir.
+services:
+  - type: web
+    name: temis-cobranca
+    runtime: node
+    plan: free
+    region: ohio                # escolha a região mais perto da região do seu banco no Neon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run web
+    healthCheckPath: /saude
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: TZ
+        value: America/Sao_Paulo
+      - key: SGP_MODO
+        value: exemplo           # troque para "api" quando a integração com o SGP existir
+      - key: DATABASE_URL
+        sync: false              # segredo: o Render pede o valor na criação (não fica no git)

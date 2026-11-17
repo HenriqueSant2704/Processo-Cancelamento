@@ -1,8 +1,14 @@
-// Guarda os processos num arquivo JSON local (pasta data/, fora do git).
-// Simples para começar; depois pode ser trocado por um banco de dados
-// mantendo os mesmos métodos.
+// Onde os processos ficam guardados. Existem duas implementações com os
+// mesmos métodos (todos assíncronos):
+//   - RepositorioJson: arquivo local (modo demonstração e testes)
+//   - RepositorioPostgres: banco Neon (uso real), em repositorioPostgres.js
+//
+// Métodos: listar(), obter(id), obterPorTarefa(tarefaId),
+//          processoAtivoDoCliente(clienteId), proximoId(), salvarProcesso(processo)
 const fs = require('node:fs');
 const path = require('node:path');
+
+class ErroConflito extends Error {}
 
 class RepositorioJson {
   constructor(arquivo) {
@@ -11,33 +17,38 @@ class RepositorioJson {
     if (arquivo && fs.existsSync(arquivo)) this.dados = JSON.parse(fs.readFileSync(arquivo, 'utf8'));
   }
 
-  listar() {
+  async listar() {
     return this.dados.processos;
   }
 
-  obter(id) {
-    return this.dados.processos.find((p) => p.id === String(id));
+  async obter(id) {
+    return this.dados.processos.find((p) => p.id === String(id)) || null;
   }
 
-  obterPorTarefa(tarefaId) {
+  async obterPorTarefa(tarefaId) {
     return this.obter(String(tarefaId).split('.')[0]);
   }
 
-  processoAtivoDoCliente(clienteId) {
-    return this.dados.processos.find((p) => p.status === 'ativo' && p.cliente.id === String(clienteId));
+  async processoAtivoDoCliente(clienteId) {
+    return this.dados.processos.find((p) => p.status === 'ativo' && p.cliente.id === String(clienteId)) || null;
   }
 
-  proximoId() {
+  async proximoId() {
     this.dados.ultimoId += 1;
     return String(this.dados.ultimoId);
   }
 
-  adicionar(processo) {
-    this.dados.processos.push(processo);
+  async salvarProcesso(processo) {
+    if (!this.dados.processos.includes(processo)) {
+      const i = this.dados.processos.findIndex((p) => p.id === processo.id);
+      if (i >= 0) this.dados.processos[i] = processo;
+      else this.dados.processos.push(processo);
+    }
+    this.gravarArquivo();
   }
 
-  salvar() {
-    if (!this.arquivo) return; // sem arquivo = só em memória (usado nos testes)
+  gravarArquivo() {
+    if (!this.arquivo) return; // sem arquivo = só em memória (testes)
     fs.mkdirSync(path.dirname(this.arquivo), { recursive: true });
     const temporario = `${this.arquivo}.tmp`;
     fs.writeFileSync(temporario, JSON.stringify(this.dados, null, 2));
@@ -45,4 +56,4 @@ class RepositorioJson {
   }
 }
 
-module.exports = { RepositorioJson };
+module.exports = { RepositorioJson, ErroConflito };

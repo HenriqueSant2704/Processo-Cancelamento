@@ -38,11 +38,19 @@ o que foi feito ou o motivo. A resposta pode ser dada antes da data prevista
 **Tudo isso é configurável** em [`src/config/cronograma.json`](src/config/cronograma.json):
 quantidade de tentativas, intervalos, prazos, textos das tarefas e feriados.
 
+## Tecnologias
+
+- **JavaScript + Node.js** (22 ou superior)
+- **Postgres no Neon** para guardar os dados (dependência: `pg`)
+- **Render** para publicar a tela na internet
+- Sem framework: o servidor usa o módulo `http` do Node e a tela é HTML, CSS e JavaScript puro
+
 ## Tela do financeiro
 
 ```bash
-npm run demo     # abre a tela com clientes FICTÍCIOS (dados em data/demo, separados)
-npm run web      # abre a tela com os dados reais (data/processos.json)
+npm install
+npm run demo     # tela com clientes FICTÍCIOS (dados em data/demo, sem banco e sem login)
+npm run web      # tela de verdade (Neon com login, ou arquivo local se não houver DATABASE_URL)
 ```
 
 Depois acesse http://localhost:3000. Na tela:
@@ -54,48 +62,76 @@ Depois acesse http://localhost:3000. Na tela:
 - **Todos os clientes**: em andamento e finalizados, com busca.
 - No modo demonstração dá para **simular outro dia** para ver o cronograma andar.
 
+## Banco no Neon
+
+1. Crie um projeto em https://neon.tech e copie a **connection string** (Dashboard > Connect).
+2. Cole no arquivo `.env`, na linha `DATABASE_URL=`.
+3. Rode `npm run migrar` para criar as tabelas (o servidor também faz isso sozinho ao iniciar).
+4. Crie os usuários dos funcionários:
+
+```bash
+npm run cli -- criar-usuario jessica --nome "Jessica Silva"
+```
+
+O comando mostra uma **senha temporária** uma única vez. Passe para a pessoa por um canal privado;
+ela pode trocar a senha na própria tela (menu no nome dela > Trocar senha).
+Outros: `redefinir-senha <login>`, `desativar-usuario <login>`, `usuarios`.
+
+Com `DATABASE_URL` preenchida, a tela **exige login** e o nome de quem concluiu cada tarefa
+vem do login (ninguém registra em nome de outra pessoa).
+
+## Publicar no Render
+
+O arquivo [`render.yaml`](render.yaml) já descreve o serviço.
+
+1. Suba o código para o GitHub (`git push`).
+2. No Render: **New > Blueprint**, escolha o repositório `Processo-Cancelamento`.
+3. Quando pedir `DATABASE_URL`, cole a connection string do Neon.
+4. Depois do deploy, crie os usuários (rodando o comando `criar-usuario` no seu computador com o mesmo `DATABASE_URL` no `.env`).
+
+Observação: no plano grátis do Render o serviço "dorme" depois de um tempo sem acesso; o primeiro acesso do dia pode demorar uns 30 a 60 segundos.
+
 ## Estrutura
 
 ```
 src/
-  index.js                 linha de comando
+  index.js                 linha de comando (agenda, tarefas, usuários)
   web/                     servidor da tela (app.js, visao.js) e a tela em si (publico/)
   demo/                    gera clientes fictícios para demonstração
   config/                  variáveis de ambiente e cronograma.json
   cronograma/motor.js      gera as tarefas com as datas e avança as etapas
   processos/               regras de uso (sincronizar, agenda, concluir) e armazenamento
+                           (repositorioPostgres.js no Neon, repositorio.js em arquivo local)
+  banco/                   conexão com o Postgres e esquema.sql (tabelas)
+  auth/usuarios.js         login: usuários, senhas (hash scrypt) e sessões
   integracoes/sgp/         fonte dos clientes bloqueados (exemplo fictício / API real a fazer)
   auditoria/historico.js   histórico de tudo que foi feito (quem, o quê, quando)
   utils/datas.js           datas e dias úteis
-tests/                     testes automatizados (node --test)
-data/                      processos salvos em JSON (fora do git)
+tests/                     testes automatizados (node --test; o banco é testado com PGlite, um Postgres em memória)
+render.yaml                configuração do Render
 ```
 
-## Como usar
-
-Requisitos: Node.js 22 ou superior. Não há dependências externas.
+## Linha de comando
 
 ```bash
-cp .env.example .env
 npm run sincronizar      # busca os bloqueados no SGP e abre os processos
 npm start                # agenda de hoje
 npm test                 # testes
-```
-
-Outros comandos:
-
-```bash
 npm run cli -- processos                                   # processos ativos
 npm run cli -- processo 1                                  # cronograma e histórico do processo 1
 npm run cli -- concluir 1.2 --por Jessica                   # marca a tarefa 1.2 como feita
 npm run cli -- decidir 1.5 sim --por Jessica --obs "Pagou via PIX"
-npm run cli -- agenda --data 2026-11-20                    # simula outro dia
 ```
+
+No PowerShell do Windows, use `npm.cmd` no lugar de `npm`.
 
 Por enquanto o SGP está em modo `exemplo` (clientes fictícios). A integração real
 com a API do SGP entra quando tivermos a documentação e as credenciais.
 
 ## Segurança e LGPD
 
-- Credenciais do SGP ficam **somente** no `.env` (que não vai para o git).
+- Credenciais (Neon, SGP) ficam **somente** no `.env` ou no painel do Render, nunca no git.
+- Com o banco configurado, a tela exige login; senhas e sessões são guardadas só como hash.
+- O servidor se recusa a abrir para a rede sem login.
+- Tentativas de login são limitadas (10 a cada 15 minutos por IP).
 - A pasta `data/` e os logs são ignorados pelo git, pois contêm dados de clientes.

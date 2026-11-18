@@ -207,19 +207,19 @@ test('criar ocorrência no SGP: usa o código do tipo, não abre OS e devolve o 
   await assert.rejects(recusa.criarOcorrencia({ contrato: '1', tipoNome: 'Financeiro - Negativação', conteudo: 'x' }), /Contrato inválido/);
 });
 
-test('comentar ocorrência: acha o ID pela numeração e grava o comentário', async () => {
+test('comentar ocorrência: usa o ID da OS da ocorrência', async () => {
   const { criarApiOcorrencias } = require('../src/integracoes/sgp/ocorrencias');
   const chamadas = [];
   const buscar = async (url, op) => {
     const corpo = JSON.parse(op.body);
     chamadas.push({ url, corpo });
-    if (url.endsWith('/api/ura/ocorrencia/list/')) return { ok: true, status: 200, json: async () => ({ paginacao: { total: 1 }, ocorrencias: [{ id: 4321, numero: '2611170001', status_id: 0 }] }) };
+    if (url.endsWith('/api/ura/ocorrencia/list/')) return { ok: true, status: 200, json: async () => ({ paginacao: { total: 1 }, ocorrencias: [{ id: 4321, numero: '2611170001', status_id: 0, ordens_servicos: [{ id: 8765 }] }] }) };
     return { ok: true, status: 200, json: async () => ({ anotacao_id: 1 }) };
   };
   const oc = criarApiOcorrencias({ origem: 'https://sgp.teste', app: 'a', token: 't', buscar, buscarTipos: async () => ({ status: 200, texto: '[]' }) });
   await oc.comentarOcorrencia({ numero: '2611170001', texto: 'Criada pelo sistema. @jessica_rasteiro' });
   assert.strictEqual(chamadas[0].corpo.ocorrencia, '2611170001');
-  assert.strictEqual(chamadas[1].url, 'https://sgp.teste/api/os/ocorrencia/comentario/add/id/4321/');
+  assert.strictEqual(chamadas[1].url, 'https://sgp.teste/api/os/ocorrencia/comentario/add/id/8765/');
   assert.match(chamadas[1].corpo.anotacao, /@jessica_rasteiro/);
 });
 

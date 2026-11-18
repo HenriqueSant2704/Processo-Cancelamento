@@ -87,9 +87,13 @@ function criarApiOcorrencias({ origem, app, token, buscar = fetch, buscarTipos =
     const achadas = await listarOcorrencias({ ocorrencia: String(numero) });
     const alvo = achadas.find((o) => texto(o.numero, 40) === String(numero));
     if (!alvo || !alvo.id) throw new ErroSgp(`Ocorrência ${numero} não encontrada no SGP para comentar.`);
+    // A rota de comentário do SGP pede o ID da ORDEM DE SERVIÇO da ocorrência (testado: com o ID da
+    // ocorrência dá 404). Ocorrência sem OS não tem como receber comentário pela API.
+    const os = (Array.isArray(alvo.ordens_servicos) ? alvo.ordens_servicos : []).find((s) => s && s.id);
+    if (!os) throw new ErroSgp(`a ocorrência ${numero} não tem ordem de serviço, e a API do SGP só aceita comentário em ocorrência com OS.`);
     let resposta;
     try {
-      resposta = await buscar(`${origem}/api/os/ocorrencia/comentario/add/id/${encodeURIComponent(alvo.id)}/`, {
+      resposta = await buscar(`${origem}/api/os/ocorrencia/comentario/add/id/${encodeURIComponent(os.id)}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ app, token, anotacao: comentario }),

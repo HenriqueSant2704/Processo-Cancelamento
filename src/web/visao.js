@@ -8,7 +8,7 @@ const porData = (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.i
 // Passos de cada etapa, para a tela "Etapas" (ex.: "2ª mensagem", "Regularizou?").
 function passosDaEtapa(etapa) {
   if (etapa.tipo === 'contatos') {
-    return [...Array.from({ length: etapa.tentativas }, (_, i) => ({ id: `msg-${i + 1}`, nome: `${i + 1}ª mensagem` })), { id: 'decisao', nome: 'Regularizou?' }];
+    return [...Array.from({ length: etapa.tentativas }, (_, i) => ({ id: `msg-${i + 1}`, nome: `${i + 1}ª mensagem` })), { id: 'promessa', nome: 'Promessa de pagamento' }, { id: 'decisao', nome: 'Regularizou?' }];
   }
   if (etapa.tipo === 'aguardo') return [{ id: 'espera', nome: 'Em espera' }, { id: 'decisao', nome: 'Regularizou?' }];
   return [{ id: 'acoes', nome: 'Ações no SGP' }];
@@ -27,6 +27,8 @@ function passoAtual(processo, etapa, hoje) {
   const passos = passosDaEtapa(etapa);
   const pega = (id) => passos.find((p) => p.id === id);
   if (etapa.tipo === 'contatos') {
+    const promessa = daEtapa.find((t) => t.promessa && t.status === 'pendente');
+    if (promessa) return { ...pega('promessa'), ate: promessa.data };
     const contatos = daEtapa.filter((t) => t.tipo === 'contato');
     const proximo = contatos.findIndex((t) => t.status === 'pendente');
     return proximo >= 0 ? pega(`msg-${proximo + 1}`) : pega('decisao');

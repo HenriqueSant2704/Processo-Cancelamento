@@ -83,3 +83,6 @@ alter table processos add column if not exists ocorrencia_numero text;
 
 -- Username do funcionário no SGP (aparece como quem abriu a ocorrência criada pelo sistema).
 alter table usuarios add column if not exists sgp_login text;
+
+-- Promessa de pagamento: nas decisões "o cliente pagou?", guarda qual aviso volta se ele não pagar.
+alter table tarefas add column if not exists promessa integer;

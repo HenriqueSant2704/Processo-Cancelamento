@@ -56,6 +56,53 @@ function criarProcesso({ id, cliente, bloqueadoEm, inicio, cronograma, fluxo = '
   return processo;
 }
 
+// Gera os avisos de uma etapa de contatos a partir do aviso nº "deIndice" (1 = todos),
+// em dias úteis alternados, e a pergunta "regularizou?" depois do último.
+function gerarContatos(processo, etapa, primeiroDia, deIndice, feriados) {
+  let dia = primeiroDia;
+  let ultimoContato = dia;
+  for (let i = deIndice; i <= etapa.tentativas; i++) {
+    novaTarefa(processo, { etapa: etapa.id, tipo: 'contato', descricao: `${etapa.mensagem} (${i}ª de ${etapa.tentativas})`, data: dia });
+    ultimoContato = dia;
+    dia = adicionarDiasUteis(dia, etapa.intervaloDiasUteis, feriados);
+  }
+  novaTarefa(processo, {
+    etapa: etapa.id,
+    tipo: 'decisao',
+    descricao: etapa.decisao.pergunta,
+    data: deIndice > etapa.tentativas ? primeiroDia : adicionarDiasUteis(ultimoContato, etapa.decisao.diasUteisAposUltimoContato || 0, feriados),
+  });
+}
+
+// Promessa de pagamento: pausa os avisos que faltam da etapa atual até a data prometida.
+// No dia, aparece "Promessa para dd/mm: o cliente pagou?". Sim -> segue como regularizado;
+// Não -> o próximo aviso entra no mesmo dia e os seguintes voltam ao ritmo normal.
+function registrarPromessa(processo, { dataPromessa, por, data, observacao }, cronograma) {
+  if (processo.status !== 'ativo') throw new Error(`O processo ${processo.id} já foi finalizado.`);
+  if (!por) throw new Error('Informe quem registrou a promessa.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataPromessa || ''))) throw new Error('Informe a data prometida pelo cliente.');
+  if (dataPromessa < data) throw new Error('A data da promessa não pode ser no passado.');
+  const etapa = obterEtapa(cronograma, processo.etapaAtual);
+  if (etapa.tipo !== 'contatos') throw new Error('Promessa de pagamento só pode ser registrada durante os avisos.');
+  const feriados = cronograma.feriados || [];
+
+  // Pausa só os avisos e a pergunta; ações (ex.: abrir ocorrência) continuam pendentes.
+  const daEtapa = processo.tarefas.filter((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo !== 'acao');
+  const contatosFeitos = processo.tarefas.filter((t) => t.etapa === etapa.id && t.tipo === 'contato' && t.status === 'concluida').length;
+  for (const t of daEtapa) Object.assign(t, { status: 'cancelada', canceladaEm: data });
+
+  const [a, m, d] = dataPromessa.split('-');
+  novaTarefa(processo, {
+    etapa: etapa.id,
+    tipo: 'decisao',
+    promessa: Math.min(contatosFeitos + 1, etapa.tentativas + 1), // aviso que volta se não pagar
+    descricao: `Promessa de pagamento para ${d}/${m}/${a}: o cliente pagou?`,
+    data: proximoDiaUtil(dataPromessa, feriados),
+  });
+  registrar(processo, { data, por, evento: 'promessa-registrada', detalhes: `Promessa de pagamento para ${d}/${m}/${a}${observacao ? ` | ${observacao}` : ''}` });
+  return processo;
+}
+
 function iniciarEtapa(processo, etapaId, dataBase, cronograma) {
   const etapa = obterEtapa(cronograma, etapaId);
   const feriados = cronograma.feriados || [];
@@ -69,24 +116,7 @@ function iniciarEtapa(processo, etapaId, dataBase, cronograma) {
   }
 
   if (etapa.tipo === 'contatos') {
-    let dia = primeiroDia;
-    let ultimoContato = dia;
-    for (let i = 1; i <= etapa.tentativas; i++) {
-      novaTarefa(processo, {
-        etapa: etapa.id,
-        tipo: 'contato',
-        descricao: `${etapa.mensagem} (${i}ª de ${etapa.tentativas})`,
-        data: dia,
-      });
-      ultimoContato = dia;
-      dia = adicionarDiasUteis(dia, etapa.intervaloDiasUteis, feriados);
-    }
-    novaTarefa(processo, {
-      etapa: etapa.id,
-      tipo: 'decisao',
-      descricao: etapa.decisao.pergunta,
-      data: adicionarDiasUteis(ultimoContato, etapa.decisao.diasUteisAposUltimoContato || 0, feriados),
-    });
+    gerarContatos(processo, etapa, primeiroDia, 1, feriados);
   } else if (etapa.tipo === 'aguardo') {
     novaTarefa(processo, {
       etapa: etapa.id,
@@ -146,6 +176,11 @@ function concluirTarefa(processo, tarefaId, { por, data, observacao, resposta },
         t.status = 'cancelada';
         t.canceladaEm = data;
       }
+    }
+    // Promessa não cumprida: retoma os avisos a partir de hoje (e não pula para a próxima etapa).
+    if (tarefa.promessa && resposta === 'nao') {
+      gerarContatos(processo, etapa, proximoDiaUtil(data, cronograma.feriados || []), tarefa.promessa, cronograma.feriados || []);
+      return tarefa;
     }
     iniciarEtapa(processo, resposta === 'sim' ? etapa.decisao.sim : etapa.decisao.nao, data, cronograma);
     return tarefa;
@@ -225,4 +260,4 @@ function agendaDoDia(processos, hoje) {
   );
 }
 
-module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, agendaDoDia, obterEtapa, obterFluxo };
+module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, registrarPromessa, agendaDoDia, obterEtapa, obterFluxo };

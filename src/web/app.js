@@ -6,7 +6,7 @@ const servico = require('../processos/servico');
 const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
-const { posicionar } = require('../cronograma/motor');
+const { posicionar, registrarPromessa } = require('../cronograma/motor');
 const { criarSincronizador } = require('../processos/sincronizador');
 
 const PUBLICO = path.join(__dirname, 'publico');
@@ -219,6 +219,24 @@ function criarApp(opcoes) {
             etapaId: String(corpo.etapa || ''),
             contatosFeitos: Number(corpo.contatosFeitos || 0),
             dataReferencia: corpo.dataReferencia || undefined,
+            observacao: typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : undefined,
+            por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
+            data: hoje,
+          }, cronograma);
+          await repositorio.salvarProcesso(processo);
+        } catch (erro) {
+          if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
+          throw new ErroHttp(400, erro.message);
+        }
+        return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
+      }
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/promessa$/))) {
+        const corpo = await lerCorpo(req);
+        const processo = await repositorio.obter(m[1]);
+        if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
+        try {
+          registrarPromessa(processo, {
+            dataPromessa: String(corpo.dataPromessa || ''),
             observacao: typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : undefined,
             por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
             data: hoje,

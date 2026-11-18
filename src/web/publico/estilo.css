@@ -468,3 +468,8 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 .botao.sgp { background: var(--acao-suave); color: var(--acao); }
 .botao.sgp:hover { border-color: var(--acao); }
 #ocorrencia-tipo { align-self: flex-start; }
+
+/* Botões do aviso: Regularizou / Promessa / Feito */
+.botao.promessa { background: var(--alerta-suave); color: var(--alerta); }
+.botao.promessa:hover { border-color: var(--alerta); }
+.acoes-tarefa { flex-wrap: wrap; justify-content: flex-end; }

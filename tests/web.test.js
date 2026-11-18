@@ -114,3 +114,17 @@ test('botão Criar no SGP: desligado por padrão; ligado cria, guarda o número 
   const outra = r.json.detalhe.paraHoje.find((x) => !x.ocorrenciaTipo);
   assert.strictEqual((await ligado.chamar(`/api/tarefas/${outra.id}/ocorrencia`, { por: 'Jessica', conteudo: 'texto ok' })).status, 400);
 });
+
+test('promessa de pagamento pela API', async (t) => {
+  const { chamar } = subir(t, { repositorio: new RepositorioJson(null), modoDemo: true });
+  const d = '?data=2026-11-16';
+  let s = (await chamar('/api/sincronizar' + d, {})).json;
+  while (s.emAndamento) s = (await chamar('/api/sincronizacao')).json;
+  const painel = (await chamar('/api/painel' + d)).json;
+  const id = painel.clientes.find((c) => c.fluxo === 'principal').id;
+  const r = await chamar(`/api/processos/${id}/promessa${d}`, { por: 'Jessica', dataPromessa: '2026-11-20', observacao: 'paga sexta' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.passo.id, 'promessa');
+  assert.ok(r.json.tarefas.some((x) => x.promessa && x.data === '2026-11-20'));
+  assert.strictEqual((await chamar(`/api/processos/${id}/promessa${d}`, { por: 'Jessica', dataPromessa: '2026-11-01' })).status, 400);
+});

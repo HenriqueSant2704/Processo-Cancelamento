@@ -145,6 +145,27 @@
     </form>
   </dialog>
 
+  <!-- Promessa de pagamento -->
+  <dialog class="janela" id="janela-promessa">
+    <form method="dialog" id="form-promessa">
+      <span class="sobretitulo" id="promessa-cliente"></span>
+      <h3>Promessa de pagamento</h3>
+      <p class="texto-suave">Os próximos avisos ficam pausados e o cliente sai da agenda até a data. No dia, aparece a pergunta "o cliente pagou?": se não, o próximo aviso entra no mesmo dia.</p>
+      <label class="campo">
+        <span>Data em que o cliente prometeu pagar</span>
+        <input name="dataPromessa" type="date" required>
+      </label>
+      <label class="campo">
+        <span>Observação (opcional)</span>
+        <input name="observacao" maxlength="300" placeholder="Ex.: vai pagar via PIX quando receber o salário">
+      </label>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="promessa-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Registrar promessa</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Criar ocorrência no SGP -->
   <dialog class="janela" id="janela-ocorrencia">
     <form method="dialog" id="form-ocorrencia">

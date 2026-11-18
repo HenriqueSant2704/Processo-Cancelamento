@@ -122,3 +122,29 @@ test('ajustar etapa: validações', () => {
   assert.throws(() => posicionar(p, { ...base, etapaId: 'aguardo-negativado', dataReferencia: '2026-12-01' }, cronograma), /futuro/);
   assert.throws(() => posicionar(p, { ...base, etapaId: 'liberacao' }, cronograma), /Escolha uma etapa/);
 });
+
+test('promessa de pagamento: pausa os avisos e, se não pagar, retoma no dia', () => {
+  const { registrarPromessa } = require('../src/cronograma/motor');
+  const p = novo('2026-11-16'); // avisos 16, 18, 20
+  concluirTodas(p, 'acao', '2026-11-16');
+  concluirTarefa(p, pendentes(p, 'contato')[0].id, { por: 'Jessica', data: '2026-11-16' }, cronograma);
+  registrarPromessa(p, { dataPromessa: '2026-11-25', por: 'Jessica', data: '2026-11-17', observacao: 'Vai pagar dia 25' }, cronograma);
+  assert.strictEqual(pendentes(p, 'contato').length, 0); // pausados
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-25']);
+  assert.strictEqual(agendaDoDia([p], '2026-11-24').length, 0); // some da agenda até lá
+  decidir(p, 'nao', '2026-11-25');
+  // 2º aviso no próprio dia 25 (qua), 3º em 27 (sex), "regularizou?" em 30 (seg)
+  assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-25', '2026-11-27']);
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-30']);
+  assert.ok(pendentes(p, 'contato')[0].descricao.includes('2ª de 3'));
+  assert.strictEqual(p.etapaAtual, 'notificacao-negativacao');
+});
+
+test('promessa cumprida vai para a liberação; data no passado é recusada', () => {
+  const { registrarPromessa } = require('../src/cronograma/motor');
+  const p = novo('2026-11-16');
+  assert.throws(() => registrarPromessa(p, { dataPromessa: '2026-11-10', por: 'J', data: '2026-11-17' }, cronograma), /passado/);
+  registrarPromessa(p, { dataPromessa: '2026-11-20', por: 'J', data: '2026-11-17' }, cronograma);
+  decidir(p, 'sim', '2026-11-20');
+  assert.strictEqual(p.etapaAtual, 'liberacao');
+});

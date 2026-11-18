@@ -337,7 +337,9 @@
           el('button', { class: 'botao nao', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'))
       : el('div', { class: 'acoes-tarefa' },
           t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
-          el('button', { class: 'botao feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
+          t.tipo === 'contato' && decisaoDaEtapa(d, t) ? el('button', { class: 'botao sim pequeno-txt', title: 'O cliente pagou: encerra os avisos', onclick: () => abrirDecisao(d, decisaoDaEtapa(d, t), 'sim') }, 'Regularizou') : null,
+          t.tipo === 'contato' ? el('button', { class: 'botao promessa', title: 'O cliente prometeu pagar numa data', onclick: () => abrirPromessa(d) }, ico('relogio'), 'Promessa') : null,
+          el('button', { class: 'botao feito', title: t.tipo === 'contato' ? 'Aviso enviado' : 'Feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
     return el('div', { class: `tarefa ${t.tipo}${t.atrasada ? ' atrasada' : ''}`, 'data-tarefa': t.id },
       el('span', { class: 'icone', html: ICONES[t.tipo] }),
       el('div', { class: 'tarefa-texto' }, el('strong', {}, t.descricao), quando),
@@ -494,6 +496,38 @@
       });
       $('#janela-ajuste').close();
       avisar('Etapa ajustada e cronograma recalculado');
+      await aposAcao();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+// ---------- Promessa de pagamento ----------
+  // Decisão "regularizou?" pendente da mesma etapa do aviso (para o botão "Regularizou").
+  const decisaoDaEtapa = (d, t) => (d.tarefas || []).find((x) => x.etapa === t.etapa && x.tipo === 'decisao' && x.status === 'pendente');
+  let promessaAtual = null;
+  function abrirPromessa(d) {
+    if (!garantirUsuario()) return;
+    promessaAtual = d;
+    const f = $('#form-promessa');
+    f.reset();
+    f.dataPromessa.min = hoje();
+    $('#promessa-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#janela-promessa').showModal();
+    f.dataPromessa.focus();
+  }
+  async function enviarPromessa(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value }) });
+      $('#janela-promessa').close();
+      avisar(`Promessa registrada para ${dataCurta(f.dataPromessa.value)}. Os avisos ficam pausados até lá.`);
       await aposAcao();
     } catch (erro) {
       avisar(erro.message, 'erro');
@@ -780,6 +814,8 @@
     estado.selecionado = null;
     recarregar();
   });
+  $('#form-promessa').addEventListener('submit', enviarPromessa);
+  $('#promessa-cancelar').addEventListener('click', () => $('#janela-promessa').close());
   $('#form-ocorrencia').addEventListener('submit', enviarOcorrencia);
   $('#ocorrencia-cancelar').addEventListener('click', () => $('#janela-ocorrencia').close());
   $('#form-ajuste').addEventListener('submit', enviarAjuste);

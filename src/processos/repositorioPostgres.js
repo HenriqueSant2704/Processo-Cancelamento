@@ -10,7 +10,7 @@ const COLUNAS_PROCESSO = `
 
 const COLUNAS_TAREFA = `
   id, processo_id::text as processo_id, etapa, tipo, descricao, data::text as data, status,
-  concluida_em::text as concluida_em, concluida_por, observacao, resposta, cancelada_em::text as cancelada_em`;
+  concluida_em::text as concluida_em, concluida_por, observacao, resposta, cancelada_em::text as cancelada_em, promessa`;
 
 function linhaParaProcesso(l) {
   return {
@@ -36,6 +36,7 @@ function linhaParaTarefa(l) {
   if (l.concluida_em) Object.assign(tarefa, { concluidaEm: l.concluida_em, concluidaPor: l.concluida_por, observacao: l.observacao });
   if (l.resposta) tarefa.resposta = l.resposta;
   if (l.cancelada_em) tarefa.canceladaEm = l.cancelada_em;
+  if (l.promessa) tarefa.promessa = l.promessa;
   return tarefa;
 }
 
@@ -140,13 +141,13 @@ class RepositorioPostgres {
 
       for (const [i, t] of processo.tarefas.entries()) {
         await query(
-          `insert into tarefas (id, processo_id, ordem, etapa, tipo, descricao, data, status, concluida_em, concluida_por, observacao, resposta, cancelada_em)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          `insert into tarefas (id, processo_id, ordem, etapa, tipo, descricao, data, status, concluida_em, concluida_por, observacao, resposta, cancelada_em, promessa)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
            on conflict (id) do update set
              status = excluded.status, concluida_em = excluded.concluida_em, concluida_por = excluded.concluida_por,
              observacao = excluded.observacao, resposta = excluded.resposta, cancelada_em = excluded.cancelada_em`,
           [t.id, processo.id, i + 1, t.etapa, t.tipo, t.descricao, t.data, t.status, t.concluidaEm || null, t.concluidaPor || null,
-            t.observacao || null, t.resposta || null, t.canceladaEm || null],
+            t.observacao || null, t.resposta || null, t.canceladaEm || null, t.promessa || null],
         );
       }
 

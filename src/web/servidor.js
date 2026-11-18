@@ -42,9 +42,9 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   } else if (config.sgp.modo === 'api' && config.sgp.criarOcorrencia) {
     const { criarApiOcorrencias } = require('../integracoes/sgp/ocorrencias');
     const oc = criarApiOcorrencias({ origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token });
-    criarOcorrenciaSgp = ({ contrato, tipoNome, conteudo }) => oc.criarOcorrencia({
+    criarOcorrenciaSgp = ({ contrato, tipoNome, conteudo, usuarioSgp }) => oc.criarOcorrencia({
       contrato, tipoNome, conteudo,
-      metodo: config.sgp.metodoOcorrencia, usuario: config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
+      metodo: config.sgp.metodoOcorrencia, usuario: usuarioSgp || config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
     });
     console.log('Criar ocorrência no SGP pelo sistema: LIGADO.');
   }

@@ -179,7 +179,7 @@ function criarApp(opcoes) {
             conteudo: typeof corpo.conteudo === 'string' ? corpo.conteudo.slice(0, 2000) : '',
             por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
             data: hojeISO(),
-            criar: criarOcorrenciaSgp,
+            criar: (dados) => criarOcorrenciaSgp({ ...dados, usuarioSgp: usuario && usuario.sgpLogin ? usuario.sgpLogin : null }),
           });
           return responderJson(res, 200, { protocolo, detalhe: visao.detalheProcesso(processo, hojeISO(), cronograma) });
         } catch (erro) {

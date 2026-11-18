@@ -128,3 +128,13 @@ test('Postgres: anota o 1º dia em que cada contrato foi visto suspenso', async 
   assert.strictEqual(vistos.get('13'), '2026-11-17'); // novo conta a partir de hoje
   assert.strictEqual(vistos.has('12'), false); // deixou de estar suspenso
 });
+
+test('usuário ligado ao username do SGP aparece na sessão', async (t) => {
+  const usuarios = new Usuarios(await novoBanco(t));
+  const { senha } = await usuarios.criar({ login: 'jessica', nome: 'Jessica' });
+  await usuarios.definirSgp('jessica', 'jessica_rasteiro');
+  const u = await usuarios.autenticar('jessica', senha);
+  const { token } = await usuarios.criarSessao(u.id);
+  assert.strictEqual((await usuarios.usuarioDaSessao(token)).sgpLogin, 'jessica_rasteiro');
+  await assert.rejects(usuarios.definirSgp('jessica', 'nome com espaço'), /inválido/);
+});

@@ -67,8 +67,16 @@ class Usuarios {
     await this.banco.query('delete from sessoes where usuario_id = $1', [r.rows[0].id]);
   }
 
+  // Liga o usuário do sistema ao username dele no SGP (vazio = usa o padrão do token).
+  async definirSgp(login, sgpLogin) {
+    const valor = String(sgpLogin || '').trim();
+    if (valor && !/^[A-Za-z0-9._@-]{2,60}$/.test(valor)) throw new Error('Username do SGP inválido.');
+    const r = await this.banco.query('update usuarios set sgp_login = $2 where login = $1 returning login', [String(login).toLowerCase(), valor || null]);
+    if (!r.rows.length) throw new Error(`Usuário "${login}" não encontrado.`);
+  }
+
   async listar() {
-    const { rows } = await this.banco.query('select login, nome, ativo from usuarios order by nome');
+    const { rows } = await this.banco.query('select login, nome, ativo, sgp_login from usuarios order by nome');
     return rows;
   }
 
@@ -94,7 +102,7 @@ class Usuarios {
   async usuarioDaSessao(token) {
     if (!token) return null;
     const { rows } = await this.banco.query(
-      `select u.id::text as id, u.login, u.nome from sessoes s join usuarios u on u.id = s.usuario_id
+      `select u.id::text as id, u.login, u.nome, u.sgp_login as "sgpLogin" from sessoes s join usuarios u on u.id = s.usuario_id
         where s.token_hash = $1 and s.expira_em > now() and u.ativo`,
       [hashToken(token)],
     );

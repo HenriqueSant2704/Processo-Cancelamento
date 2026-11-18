@@ -10,6 +10,7 @@
 //   npm run cli -- redefinir-senha <login>
 //   npm run cli -- desativar-usuario <login>
 //   npm run cli -- usuarios
+//   npm run cli -- usuario-sgp <login> <username_no_sgp>   (quem aparece como autor da ocorrência no SGP)
 // SGP:
 //   npm run cli -- sgp-diagnostico   (mostra os campos que o SGP devolve, sem dados de clientes)
 // Opção --data AAAA-MM-DD simula outro dia (padrão: hoje).
@@ -112,8 +113,13 @@ async function executar(comando, args, values, armazenamento) {
       await exigirUsuarios(armazenamento).desativar(args[0]);
       console.log(`Usuário "${args[0]}" desativado.`);
       return;
+    case 'usuario-sgp': {
+      await exigirUsuarios(armazenamento).definirSgp(args[0], args[1]);
+      console.log(args[1] ? `Usuário "${args[0]}" ligado ao SGP como "${args[1]}".` : `Usuário "${args[0]}" sem username do SGP (usa o padrão do token).`);
+      return;
+    }
     case 'usuarios':
-      for (const u of await exigirUsuarios(armazenamento).listar()) console.log(`  ${u.login.padEnd(20)} ${u.nome}${u.ativo ? '' : '  (desativado)'}`);
+      for (const u of await exigirUsuarios(armazenamento).listar()) console.log(`  ${u.login.padEnd(20)} ${u.nome}${u.sgp_login ? `  (SGP: ${u.sgp_login})` : ''}${u.ativo ? '' : '  (desativado)'}`);
       return;
     case 'sgp-diagnostico': {
       // Mostra só a ESTRUTURA do que o SGP devolve (nomes de campos e contagens), sem dados de clientes.

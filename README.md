@@ -159,7 +159,8 @@ da ocorrência. O tipo é encontrado pelo nome (rota `GET /api/os/ocorrencia/tip
 **Criar ocorrência pelo sistema:** as tarefas "Abrir ocorrência de negativação/cancelamento no SGP" ganham o
 botão **Criar no SGP** (rota URA `Chamado – Criar`), que abre a ocorrência do tipo certo, guarda o número e conclui
 a tarefa. **Grava no SGP de verdade**, por isso só funciona com `SGP_CRIAR_OCORRENCIA=sim`. Opcionais:
-`SGP_USUARIO_OCORRENCIA`, `SGP_METODO_OCORRENCIA`, `SGP_ABRIR_OS`.
+`SGP_USUARIO_OCORRENCIA`, `SGP_METODO_OCORRENCIA`, `SGP_ABRIR_OS`. Para a ocorrência sair no nome de quem clicou,
+ligue cada usuário ao username dele no SGP: `npm run cli -- usuario-sgp jessica jessica_rasteiro`.
 
 Se o SGP não mandar a data da suspensão, o sistema anota o **primeiro dia em que viu** o contrato
 suspenso. Na prática o SGP não manda essa data, então o sistema usa o **vencimento da fatura em aberto

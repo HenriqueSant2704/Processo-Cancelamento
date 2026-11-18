@@ -43,6 +43,8 @@ module.exports = {
     abrirOsJunto: /^(sim|true|1)$/i.test(process.env.SGP_ABRIR_OS || ''),
     // Responsável da ocorrência criada pelo sistema e quem é citado no comentário (username do SGP).
     responsavelOcorrencia: (process.env.SGP_RESPONSAVEL_OCORRENCIA || '').trim(),
+    // Comentário automático na ocorrência a cada ação na tela (GRAVA no SGP).
+    comentarOcorrencia: /^(sim|true|1)$/i.test(process.env.SGP_COMENTAR_OCORRENCIA || ''),
   },
   carregarCronograma,
 };

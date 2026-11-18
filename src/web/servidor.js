@@ -62,8 +62,19 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log('Criar ocorrência no SGP pelo sistema: LIGADO.');
   }
 
+  // Comentários automáticos na ocorrência do contrato (GRAVA no SGP): SGP_COMENTAR_OCORRENCIA=sim.
+  let comentarOcorrenciaSgp = null;
+  if (!modoDemo && config.sgp.modo === 'api' && config.sgp.comentarOcorrencia) {
+    const { criarApiOcorrencias } = require('../integracoes/sgp/ocorrencias');
+    const ocC = criarApiOcorrencias({ origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token });
+    comentarOcorrenciaSgp = ({ numero, texto }) => ocC.comentarOcorrencia({ numero, texto });
+    console.log('Comentários automáticos nas ocorrências do SGP: LIGADO.');
+  }
+
   const app = criarApp({
     criarOcorrenciaSgp,
+    comentarOcorrenciaSgp,
+    responsavelSgp: config.sgp.responsavelOcorrencia,
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
     cronograma,

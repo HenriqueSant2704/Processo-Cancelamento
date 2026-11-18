@@ -128,3 +128,25 @@ test('promessa de pagamento pela API', async (t) => {
   assert.ok(r.json.tarefas.some((x) => x.promessa && x.data === '2026-11-20'));
   assert.strictEqual((await chamar(`/api/processos/${id}/promessa${d}`, { por: 'Jessica', dataPromessa: '2026-11-01' })).status, 400);
 });
+
+test('comentários automáticos na ocorrência a cada ação (quando ligado)', async (t) => {
+  const { criarProcesso } = require('../src/cronograma/motor');
+  const repositorio = new RepositorioJson(null);
+  const cronograma = carregarCronograma();
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.ocorrencia = { numero: '999' };
+  await repositorio.salvarProcesso(p);
+  const comentarios = [];
+  const { chamar } = subir(t, { repositorio, modoDemo: true, responsavelSgp: 'jessica_rasteiro', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
+  const d = '?data=2026-11-16';
+  const aviso = p.tarefas.find((x) => x.tipo === 'contato');
+  await chamar(`/api/tarefas/${aviso.id}/concluir${d}`, { por: 'Jessica' });
+  await chamar(`/api/processos/1/promessa${d}`, { por: 'Jessica', dataPromessa: '2026-11-20', observacao: 'paga sexta' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(comentarios.length, 2);
+  assert.strictEqual(comentarios[0].numero, '999');
+  assert.match(comentarios[0].texto, /Notificação enviada: .*1ª de 3/);
+  assert.match(comentarios[0].texto, /Jessica/);
+  assert.match(comentarios[0].texto, /@jessica_rasteiro/);
+  assert.match(comentarios[1].texto, /Promessa de pagamento para 20\/11\/2026/);
+});

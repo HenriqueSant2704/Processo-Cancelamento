@@ -162,6 +162,14 @@ a tarefa. **Grava no SGP de verdade**, por isso só funciona com `SGP_CRIAR_OCOR
 `SGP_USUARIO_OCORRENCIA`, `SGP_METODO_OCORRENCIA`, `SGP_ABRIR_OS`. Para a ocorrência sair no nome de quem clicou,
 ligue cada usuário ao username dele no SGP: `npm run cli -- usuario-sgp jessica jessica_rasteiro`.
 
+**Comentários automáticos:** com `SGP_COMENTAR_OCORRENCIA=sim`, cada ação na tela (aviso enviado, promessa,
+regularizou, ajuste de etapa) grava um comentário na ocorrência do contrato no SGP, com quem fez e a menção ao
+`SGP_RESPONSAVEL_OCORRENCIA`. A sincronização liga cada processo à ocorrência aberta do contrato
+("Financeiro - Negativação" ou "Cancelamento por Inadiplência").
+
+**Promessa de pagamento:** em cada aviso dá para registrar a data prometida; os avisos pausam até lá e, no dia,
+aparece "o cliente pagou?" (não = o próximo aviso entra no mesmo dia).
+
 Se o SGP não mandar a data da suspensão, o sistema anota o **primeiro dia em que viu** o contrato
 suspenso. Na prática o SGP não manda essa data, então o sistema usa o **vencimento da fatura em aberto
 mais antiga + 15 dias** (venceu dia 1, bloqueia dia 16, o processo começa dia 17), configurável em

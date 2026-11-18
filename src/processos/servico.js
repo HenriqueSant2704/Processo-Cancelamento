@@ -62,6 +62,21 @@ async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }
   return { totalPosCancelamento: lista.length, novos };
 }
 
+// Liga cada processo de suspenso à ocorrência aberta do contrato no SGP (para os comentários automáticos).
+async function vincularOcorrencias({ sgp, repositorio }) {
+  const porContrato = await sgp.listarOcorrenciasDoFluxoPrincipal();
+  let ligados = 0;
+  for (const p of await repositorio.listar()) {
+    if (p.status !== 'ativo' || (p.fluxo || 'principal') !== 'principal') continue;
+    const achada = porContrato.get(String(p.cliente.contrato));
+    if (achada && (!p.ocorrencia || p.ocorrencia.numero !== achada.numero)) {
+      await repositorio.atualizarOcorrencia(p.id, achada.numero);
+      ligados++;
+    }
+  }
+  return ligados;
+}
+
 // Pós-cancelamento + suspensos numa rodada só. As duas partes são independentes:
 // se uma falhar (ex.: SGP lento), a outra ainda é gravada; o erro é repassado no fim.
 async function sincronizarTudo(args) {
@@ -79,6 +94,13 @@ async function sincronizarTudo(args) {
     suspensos = await sincronizar(args);
   } catch (erro) {
     erros.push(`suspensos: ${erro.message}`);
+  }
+  if (typeof args.sgp.listarOcorrenciasDoFluxoPrincipal === 'function') {
+    try {
+      await vincularOcorrencias(args);
+    } catch (erro) {
+      erros.push(`ocorrências: ${erro.message}`);
+    }
   }
   const resultado = { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
   if (erros.length) {

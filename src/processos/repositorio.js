@@ -48,6 +48,11 @@ class RepositorioJson {
     this.gravarArquivo();
   }
 
+  async atualizarOcorrencia(processoId, numero) {
+    const p = await this.obter(processoId);
+    if (p) { p.ocorrencia = { numero }; this.gravarArquivo(); }
+  }
+
   async atualizarBloqueio(processoId, data) {
     const p = await this.obter(processoId);
     if (p) { p.bloqueadoEm = data; this.gravarArquivo(); }

@@ -6,7 +6,8 @@ const servico = require('../processos/servico');
 const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
-const { posicionar, registrarPromessa } = require('../cronograma/motor');
+const { posicionar, registrarPromessa, obterEtapa } = require('../cronograma/motor');
+const { textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 
 const PUBLICO = path.join(__dirname, 'publico');
@@ -115,9 +116,17 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
 }
 
 // opcoes: { repositorio, usuarios (null = sem login), cronograma, criarSgp(hoje), sincronizador, modoDemo, cookieSeguro, atrasDeProxy,
-//           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado) }
+//           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado),
+//           comentarOcorrenciaSgp ({ numero, texto }) (null = sem comentários automáticos), responsavelSgp }
 function criarApp(opcoes) {
-  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null } = opcoes;
+  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '' } = opcoes;
+  // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
+  const comentar = (processo, evento) => {
+    if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
+    const texto = textoComentario(evento, { responsavel: responsavelSgp });
+    Promise.resolve(comentarOcorrenciaSgp({ numero: processo.ocorrencia.numero, texto }))
+      .catch((erro) => console.error(`Comentário na ocorrência ${processo.ocorrencia.numero} falhou: ${erro.message}`));
+  };
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
     executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
@@ -215,15 +224,17 @@ function criarApp(opcoes) {
         const processo = await repositorio.obter(m[1]);
         if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
         try {
-          posicionar(processo, {
+          const dadosAjuste = {
             etapaId: String(corpo.etapa || ''),
             contatosFeitos: Number(corpo.contatosFeitos || 0),
             dataReferencia: corpo.dataReferencia || undefined,
             observacao: typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : undefined,
             por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
             data: hoje,
-          }, cronograma);
+          };
+          posicionar(processo, dadosAjuste, cronograma);
           await repositorio.salvarProcesso(processo);
+          comentar(processo, { tipo: 'ajuste', etapa: obterEtapa(cronograma, dadosAjuste.etapaId).nome, por: dadosAjuste.por, data: hoje, observacao: dadosAjuste.observacao });
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
@@ -235,13 +246,15 @@ function criarApp(opcoes) {
         const processo = await repositorio.obter(m[1]);
         if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
         try {
-          registrarPromessa(processo, {
+          const dadosPromessa = {
             dataPromessa: String(corpo.dataPromessa || ''),
             observacao: typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : undefined,
             por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
             data: hoje,
-          }, cronograma);
+          };
+          registrarPromessa(processo, dadosPromessa, cronograma);
           await repositorio.salvarProcesso(processo);
+          comentar(processo, { tipo: 'promessa', ...dadosPromessa });
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
@@ -270,7 +283,7 @@ function criarApp(opcoes) {
         const corpo = await lerCorpo(req);
         const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 1000) : undefined);
         try {
-          const { processo } = await servico.concluir({
+          const { processo, tarefa } = await servico.concluir({
             repositorio,
             cronograma,
             tarefaId: m[1],
@@ -280,6 +293,10 @@ function criarApp(opcoes) {
             resposta: corpo.resposta,
             data: hoje,
           });
+          const proxima = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual).nome : null;
+          comentar(processo, tarefa.tipo === 'decisao'
+            ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), proximaEtapa: proxima, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao }
+            : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
           return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);

@@ -40,6 +40,21 @@ async function lerDatasDeSuspensao(config, buscar) {
 function criarFonteApi(config, opcoesApi = {}) {
   const api = criarApiSgp({ url: config.sgp.uraClientesUrl, app: config.sgp.app, token: config.sgp.token, ...opcoesApi });
   return {
+    // Ocorrência ABERTA mais recente de "Financeiro - Negativação" ou "Cancelamento por Inadiplência" de cada contrato.
+    async listarOcorrenciasDoFluxoPrincipal() {
+      const origem = new URL(config.sgp.uraClientesUrl).origin;
+      const oc = criarApiOcorrencias({ origem, app: config.sgp.app, token: config.sgp.token, ...(opcoesApi.ocorrencias || {}) });
+      const sem = (t) => String(t).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+      const ids = (await oc.listarTipos()).filter((t) => /^financeiro - (negativacao|cancelamento por inadiplencia)$/.test(sem(t.descricao))).map((t) => t.id);
+      if (!ids.length) return new Map();
+      const porContrato = new Map();
+      for (const o of await oc.listarOcorrencias({ tipo: ids })) {
+        if (!o || Number(o.status_id) === 1 || o.contrato == null || !o.numero) continue;
+        const atual = porContrato.get(String(o.contrato));
+        if (!atual || String(o.data_cadastro || '') > atual.abertaEm) porContrato.set(String(o.contrato), { numero: String(o.numero), abertaEm: String(o.data_cadastro || '') });
+      }
+      return porContrato;
+    },
     // Contratos com ocorrência ABERTA de negativação pós-cancelamento.
     async listarPosCancelamento() {
       const origem = new URL(config.sgp.uraClientesUrl).origin;

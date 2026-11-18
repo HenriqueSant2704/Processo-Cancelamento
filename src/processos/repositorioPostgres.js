@@ -104,6 +104,11 @@ class RepositorioPostgres {
     });
   }
 
+  // Liga o processo à ocorrência do contrato no SGP.
+  async atualizarOcorrencia(processoId, numero) {
+    await this.banco.query('update processos set ocorrencia_numero = $2 where id = $1', [processoId, numero]);
+  }
+
   // Corrige a data do bloqueio com a data real vinda do SGP.
   async atualizarBloqueio(processoId, data) {
     await this.banco.query('update processos set bloqueado_em = $2 where id = $1', [processoId, data]);

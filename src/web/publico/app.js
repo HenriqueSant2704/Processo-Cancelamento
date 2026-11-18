@@ -531,7 +531,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value }) });
+      await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value, mensagem: f.mensagem.value }) });
       $('#janela-promessa').close();
       avisar(`Promessa registrada para ${dataCurta(f.dataPromessa.value)}. Os avisos ficam pausados até lá.`);
       await aposAcao();
@@ -599,7 +599,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${decisaoAtual.tarefa.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resposta: f.resposta.value, observacao: f.observacao.value }) });
+      await api(`/api/tarefas/${decisaoAtual.tarefa.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resposta: f.resposta.value, observacao: f.observacao.value, mensagem: f.mensagem.value }) });
       $('#janela-decisao').close();
       avisar(f.resposta.value === 'sim' ? 'Regularização registrada' : 'Registrado. Próxima etapa agendada');
       await aposAcao();

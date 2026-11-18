@@ -73,7 +73,7 @@ async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }
 
 // Avisos na ocorrência para outra pessoa (cronograma: etapa.avisarSgp). Cada tarefa avisa UMA vez,
 // quando fica pendente para hoje ou antes. destinatarios: { os: 'username_no_sgp' }.
-async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, destinatarios = {} }) {
+async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, destinatarios = {}, nomes = {} }) {
   if (typeof comentar !== 'function') return 0;
   const { obterEtapa } = require('../cronograma/motor');
   let enviados = 0;
@@ -90,7 +90,9 @@ async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, 
       if (!regra) continue;
       const para = destinatarios[regra.para];
       const texto = `[Têmis] ${regra.texto}\nContrato ${processo.cliente.contrato}.${para ? `\n@${para}` : ''}`;
-      await comentar({ numero: processo.ocorrencia.numero, texto, marcar: [para] });
+      const { htmlComentario } = require('./comentarios');
+      const html = htmlComentario({ tipo: 'aviso', titulo: t.descricao, texto: regra.texto, por: 'sistema', data: hoje }, { processo, hoje, nomeDestinatario: (nomes || {})[para] || '' });
+      await comentar({ numero: processo.ocorrencia.numero, texto, html, marcar: [para] });
       t.avisadoEm = hoje;
       mudou = true;
       enviados++;

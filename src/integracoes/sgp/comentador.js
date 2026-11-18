@@ -23,12 +23,12 @@ function criarComentador({ origem, app, token, usuarioIntegracao, senhaIntegraca
   }
 
   // numero: número (protocolo) da ocorrência; marcar: usernames do SGP a notificar.
-  async function comentar({ numero, texto, marcar = [] }) {
-    if (!sessao) return oc.comentarOcorrencia({ numero, texto });
+  async function comentar({ numero, texto, html, marcar = [] }) {
+    if (!sessao) return oc.comentarOcorrencia({ numero, texto: html || texto });
     const alvo = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
     if (!alvo || !alvo.id) throw new Error(`Ocorrência ${numero} não encontrada no SGP para comentar.`);
     const semMencao = marcar.length ? texto.replace(/\n?@[\w.-]+\s*$/g, '') : texto; // a marcação vai no campo próprio
-    return sessao.comentar({ ocorrenciaId: alvo.id, texto: semMencao, usuariosIds: await idsDe(marcar) });
+    return sessao.comentar({ ocorrenciaId: alvo.id, texto: semMencao, html, usuariosIds: await idsDe(marcar) });
   }
 
   return { comentar, usaLogin: Boolean(sessao) };

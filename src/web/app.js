@@ -7,7 +7,7 @@ const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
 const { posicionar, registrarPromessa, obterEtapa } = require('../cronograma/motor');
-const { textoComentario } = require('../processos/comentarios');
+const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 
 const PUBLICO = path.join(__dirname, 'publico');
@@ -119,7 +119,9 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
 //           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado),
 //           comentarOcorrenciaSgp ({ numero, texto }) (null = sem comentários automáticos), responsavelSgp }
 function criarApp(opcoes) {
-  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '', supervisorSgp = '' } = opcoes;
+  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '', supervisorSgp = '', nomes = {} } = opcoes;
+  // Nome de quem é marcado, para a saudação do comentário (ex.: { admin: 'Lucas', jessica_rasteiro: 'Jéssica' }).
+  const nomeDe = (username) => nomes[username] || '';
   // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
   // Os comentários de um mesmo processo saem em ordem (fim de etapa antes do início da próxima).
   let fila = Promise.resolve();
@@ -127,20 +129,28 @@ function criarApp(opcoes) {
     // Depois de qualquer ação, confere avisos pendentes (ex.: OS de retirada que acabou de ficar para hoje).
     if (typeof opcoes.aposAcao === 'function') Promise.resolve().then(opcoes.aposAcao).catch(() => {});
     if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
-    const marcar = evento.marcar || [responsavelSgp];
-    const texto = textoComentario(evento, { responsavel: marcar[0] });
+    const marcar = (evento.marcar || [responsavelSgp]).filter(Boolean);
+    const contexto = { processo, hoje: hoje(), nomeDestinatario: nomeDe(marcar[0]) };
+    const html = htmlComentario(evento, contexto);
+    const texto = textoComentario(evento, contexto);
     const numero = processo.ocorrencia.numero;
-    fila = fila.then(() => comentarOcorrenciaSgp({ numero, texto, marcar }))
+    fila = fila.then(() => comentarOcorrenciaSgp({ numero, html, texto, marcar }))
       .catch((erro) => console.error(`Comentário na ocorrência ${numero} falhou: ${erro.message}`));
   };
   // Mudou de etapa: avisa o supervisor (fim da etapa) e a responsável (início da próxima).
-  const avisarTrocaDeEtapa = (processo, { etapaAnteriorId, tarefa, por }) => {
+  // mensagem: texto próprio que a pessoa escreveu para o supervisor (substitui o automático).
+  const avisarTrocaDeEtapa = (processo, { etapaAnteriorId, tarefa, por, mensagem }) => {
     const anterior = obterEtapa(cronograma, etapaAnteriorId);
     const nova = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
-    const contatos = processo.tarefas.filter((t) => t.etapa === anterior.id && t.tipo === 'contato' && t.status === 'concluida').length;
+    const avisos = processo.tarefas.filter((t) => t.etapa === anterior.id && t.tipo === 'contato' && t.status === 'concluida');
+    const datas = avisos.map((t) => String(t.concluidaEm || '').split('-').reverse().slice(0, 2).join('/'));
     comentar(processo, {
-      tipo: 'fim-etapa', etapa: anterior.nome, etapaTipo: anterior.tipo, contatos, resposta: tarefa.resposta,
-      proximaEtapa: nova ? nova.nome : null, resultado: processo.resultado, por, data: hoje(), observacao: tarefa.observacao,
+      tipo: 'fim-etapa', etapa: anterior.nome, etapaTipo: anterior.tipo, contatos: avisos.length,
+      datasAvisos: datas.length > 1 ? `${datas.slice(0, -1).join(', ')} e ${datas[datas.length - 1]}` : datas[0],
+      acoes: anterior.tipo === 'acao' ? anterior.acoes : null,
+      resposta: tarefa.resposta, proximaEtapa: nova ? nova.nome : null, resultado: processo.resultado,
+      por, data: hoje(), observacao: tarefa.observacao,
+      mensagem, titulo: `Etapa encerrada: ${anterior.nome}`,
       marcar: [supervisorSgp || responsavelSgp],
     });
     if (nova) {
@@ -276,7 +286,7 @@ function criarApp(opcoes) {
           };
           registrarPromessa(processo, dadosPromessa, cronograma);
           await repositorio.salvarProcesso(processo);
-          comentar(processo, { tipo: 'promessa', ...dadosPromessa });
+          comentar(processo, { tipo: 'promessa', ...dadosPromessa, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: 'Promessa de pagamento' });
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
@@ -319,10 +329,10 @@ function criarApp(opcoes) {
           if (trocouEtapa) {
             // Fim de etapa: comentário para o supervisor (Lucas) e, se houver, início da próxima para a Jéssica.
             if (tarefa.tipo !== 'decisao') comentar(processo, { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
-            avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor });
+            avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : '') });
           } else {
             comentar(processo, tarefa.tipo === 'decisao'
-              ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao }
+              ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
               : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
           }
           return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));

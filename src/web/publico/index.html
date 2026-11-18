@@ -137,6 +137,10 @@
         <span id="decisao-rotulo">O que foi feito? Por quê?</span>
         <textarea name="observacao" rows="3" required placeholder="Ex.: Pagou via PIX hoje às 10h / Não atendeu as ligações"></textarea>
       </label>
+      <label class="campo">
+        <span>Mensagem para a ocorrência no SGP <em class="opcional">(opcional)</em></span>
+        <textarea name="mensagem" rows="3" maxlength="3000" placeholder="Escreva aqui se quiser mandar um texto seu (ex.: Lucas, o cliente pagou com o desconto que você autorizou). Em branco, vai a mensagem automática."></textarea>
+      </label>
       <p class="efeito" id="decisao-efeito"></p>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="decisao-cancelar">Cancelar</button>
@@ -158,6 +162,10 @@
       <label class="campo">
         <span>Observação (opcional)</span>
         <input name="observacao" maxlength="300" placeholder="Ex.: vai pagar via PIX quando receber o salário">
+      </label>
+      <label class="campo">
+        <span>Mensagem para a ocorrência no SGP <em class="opcional">(opcional)</em></span>
+        <textarea name="mensagem" rows="3" maxlength="3000" placeholder="Escreva aqui se quiser mandar um texto seu (ex.: Lucas, o cliente pagou com o desconto que você autorizou). Em branco, vai a mensagem automática."></textarea>
       </label>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="promessa-cancelar">Cancelar</button>

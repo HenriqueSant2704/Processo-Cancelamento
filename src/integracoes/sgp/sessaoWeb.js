@@ -42,10 +42,10 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
   }
 
   // usuariosIds: IDs do SGP de quem deve ser marcado ("Usuários notificados").
-  async function comentar({ ocorrenciaId, texto, usuariosIds = [] }) {
+  async function comentar({ ocorrenciaId, texto, html, usuariosIds = [] }) {
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
       if (!logado) await entrar();
-      const corpo = new URLSearchParams({ comentario: `<p>${escaparHtml(texto).replace(/\n/g, '<br>')}</p>`, publico: '0' });
+      const corpo = new URLSearchParams({ comentario: html || `<p>${escaparHtml(texto).replace(/\n/g, '<br>')}</p>`, publico: '0' });
       // Formato da tela: notificacao_usuarios=usuario_<ID> (um campo por pessoa marcada).
       for (const id of usuariosIds) corpo.append('notificacao_usuarios', `usuario_${id}`);
       const r = await buscar(`${origem}/crm/atendimento/ocorrencia/${encodeURIComponent(ocorrenciaId)}/comentario/`, {

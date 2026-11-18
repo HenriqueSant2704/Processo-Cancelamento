@@ -57,8 +57,11 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
         metodo: config.sgp.metodoOcorrencia, usuario: usuarioSgp || config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
       });
       try {
+        const { htmlComentario } = require('../processos/comentarios');
+        const nome = config.sgp.nomes[responsavel] || '';
         await comentador.comentar({
           numero: criada.protocolo,
+          html: htmlComentario({ tipo: 'aviso', titulo: `Ocorrência aberta pelo sistema (${tipoNome})`, texto: `Esta ocorrência foi aberta pelo sistema de cobrança. Os próximos passos e as notificações ao cliente serão registrados aqui.`, por: por || 'usuário do sistema', data: new Date().toISOString().slice(0, 10) }, { nomeDestinatario: nome }),
           texto: `[Têmis] Ocorrência criada pelo sistema de cobrança por ${por || 'usuário do sistema'}.`,
           marcar: [responsavel],
         });
@@ -83,7 +86,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     if (!comentarOcorrenciaSgp) return;
     try {
       const n = await servico.enviarAvisosPendentes({
-        repositorio: armazenamento.repositorio, cronograma, hoje: dia, comentar: comentarOcorrenciaSgp, destinatarios: { os: config.sgp.responsavelOs },
+        repositorio: armazenamento.repositorio, cronograma, hoje: dia, comentar: comentarOcorrenciaSgp, destinatarios: { os: config.sgp.responsavelOs }, nomes: config.sgp.nomes,
       });
       if (n) console.log(`Avisos enviados nas ocorrências: ${n}`);
     } catch (erro) {
@@ -110,6 +113,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     comentarOcorrenciaSgp,
     responsavelSgp: config.sgp.responsavelOcorrencia,
     supervisorSgp: config.sgp.supervisor,
+    nomes: config.sgp.nomes,
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
     cronograma,

@@ -20,6 +20,8 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
     const existente = await repositorio.processoAtivoDoCliente(cliente.id);
     if (existente) {
       if (cliente.financeiro) await repositorio.atualizarFinanceiro(existente.id, { ...cliente.financeiro, em: hoje });
+      // Data real da suspensão (SGP) diferente da que temos: corrige.
+      if (cliente.dataReal && existente.bloqueadoEm && existente.bloqueadoEm !== cliente.bloqueadoEm) await repositorio.atualizarBloqueio(existente.id, cliente.bloqueadoEm);
       continue;
     }
     const processo = criarProcesso({

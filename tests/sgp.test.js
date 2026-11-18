@@ -222,3 +222,26 @@ test('comentar ocorrência: acha o ID pela numeração e grava o comentário', a
   assert.strictEqual(chamadas[1].url, 'https://sgp.teste/api/os/ocorrencia/comentario/add/id/4321/');
   assert.match(chamadas[1].corpo.anotacao, /@jessica_rasteiro/);
 });
+
+test('data real da suspensão (Contrato – Listar) tem prioridade e corrige processos existentes', async () => {
+  const { criarFonteApi } = require('../src/integracoes/sgp');
+  const { sincronizar } = require('../src/processos/servico');
+  const config = { sgp: { uraClientesUrl: 'https://sgp.teste/api/ura/clientes/', app: 'a', token: 't', statusSuspenso: ['SUSPENSO'], motivos: [], campoDataSuspensao: '', diasBloqueioAposVencimento: 15 } };
+  const clientes = [{ id: 1, nome: 'A', contratos: [{ id: 11, status: 'SUSPENSO', motivo_status: 'FINANCEIRO' }], titulos: [{ clientecontrato_id: 11, status: 'aberto', dataVencimento: '2026-09-01', valorCorrigido: 50 }] }];
+  const buscar = async (url) => {
+    if (url.endsWith('/api/ura/listacontrato/')) return { ok: true, status: 200, json: async () => [{ id_contrato: 11, data_status: '2026-11-10 08:00:00', status: 'Suspenso' }] };
+    return { ok: true, status: 200, json: async () => ({ clientes, paginacao: { total: 1 } }) };
+  };
+  const fonte = criarFonteApi(config, { buscar, esperar: async () => {} });
+  const [c] = await fonte.listarClientesBloqueados();
+  assert.strictEqual(c.bloqueadoEm, '2026-11-10'); // e não 16/09 (fatura + 15)
+  assert.strictEqual(c.dataReal, true);
+
+  const repositorio = new RepositorioJson(null);
+  const cronograma = carregarCronograma();
+  const errado = { listarClientesBloqueados: async () => [{ ...c, bloqueadoEm: '2026-09-16', dataReal: false }] };
+  const [p] = (await sincronizar({ sgp: errado, repositorio, cronograma, hoje: '2026-11-17' })).novos;
+  assert.strictEqual(p.bloqueadoEm, '2026-09-16');
+  await sincronizar({ sgp: { listarClientesBloqueados: async () => [c] }, repositorio, cronograma, hoje: '2026-11-18' });
+  assert.strictEqual((await repositorio.obter(p.id)).bloqueadoEm, '2026-11-10');
+});

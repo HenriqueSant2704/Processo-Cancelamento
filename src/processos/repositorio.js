@@ -48,6 +48,11 @@ class RepositorioJson {
     this.gravarArquivo();
   }
 
+  async atualizarBloqueio(processoId, data) {
+    const p = await this.obter(processoId);
+    if (p) { p.bloqueadoEm = data; this.gravarArquivo(); }
+  }
+
   async atualizarFinanceiro(processoId, financeiro) {
     const p = await this.obter(processoId);
     if (p) { p.financeiro = financeiro; this.gravarArquivo(); }

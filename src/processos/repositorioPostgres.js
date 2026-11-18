@@ -74,7 +74,7 @@ class RepositorioPostgres {
   }
 
   async processoAtivoDoCliente(clienteId) {
-    const { rows } = await this.banco.query(`select id::text as id from processos where cliente_id = $1 and status = 'ativo'`, [String(clienteId)]);
+    const { rows } = await this.banco.query(`select id::text as id, bloqueado_em::text as "bloqueadoEm" from processos where cliente_id = $1 and status = 'ativo'`, [String(clienteId)]);
     return rows[0] || null;
   }
 
@@ -101,6 +101,11 @@ class RepositorioPostgres {
       const r = await query('select contrato_id, visto_desde::text as visto_desde from sgp_suspensoes');
       return new Map(r.rows.map((l) => [l.contrato_id, l.visto_desde]));
     });
+  }
+
+  // Corrige a data do bloqueio com a data real vinda do SGP.
+  async atualizarBloqueio(processoId, data) {
+    await this.banco.query('update processos set bloqueado_em = $2 where id = $1', [processoId, data]);
   }
 
   // Atualiza só o valor em aberto (vem do SGP a cada sincronização).

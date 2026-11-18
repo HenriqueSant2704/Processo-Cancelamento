@@ -46,7 +46,8 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
       if (!logado) await entrar();
       const corpo = new URLSearchParams({ comentario: `<p>${escaparHtml(texto).replace(/\n/g, '<br>')}</p>`, publico: '0' });
-      for (const id of usuariosIds) corpo.append('notificacao_usuarios', String(id));
+      // Formato da tela: notificacao_usuarios=usuario_<ID> (um campo por pessoa marcada).
+      for (const id of usuariosIds) corpo.append('notificacao_usuarios', `usuario_${id}`);
       const r = await buscar(`${origem}/crm/atendimento/ocorrencia/${encodeURIComponent(ocorrenciaId)}/comentario/`, {
         method: 'POST',
         redirect: 'manual',
@@ -70,7 +71,7 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
         throw new ErroSgp(`O SGP não gravou o comentário (HTTP ${r.status}${msg ? `: ${msg}` : ''}).`);
       }
       const dados = await r.json().catch(() => ({}));
-      return { comentarioId: dados.id || null };
+      return { comentarioId: dados.id || null, marcados: Array.isArray(dados.usuarios) ? dados.usuarios : [] };
     }
     throw new ErroSgp('O SGP não aceitou o comentário mesmo após entrar de novo.');
   }

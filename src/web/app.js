@@ -126,7 +126,7 @@ function criarApp(opcoes) {
     if (typeof opcoes.aposAcao === 'function') Promise.resolve().then(opcoes.aposAcao).catch(() => {});
     if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
     const texto = textoComentario(evento, { responsavel: responsavelSgp });
-    Promise.resolve(comentarOcorrenciaSgp({ numero: processo.ocorrencia.numero, texto }))
+    Promise.resolve(comentarOcorrenciaSgp({ numero: processo.ocorrencia.numero, texto, marcar: [responsavelSgp] }))
       .catch((erro) => console.error(`Comentário na ocorrência ${processo.ocorrencia.numero} falhou: ${erro.message}`));
   };
   const limitador = criarLimitador();

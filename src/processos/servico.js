@@ -81,7 +81,7 @@ async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, 
       if (!regra) continue;
       const para = destinatarios[regra.para];
       const texto = `[Têmis] ${regra.texto}\nContrato ${processo.cliente.contrato}.${para ? `\n@${para}` : ''}`;
-      await comentar({ numero: processo.ocorrencia.numero, texto });
+      await comentar({ numero: processo.ocorrencia.numero, texto, marcar: [para] });
       t.avisadoEm = hoje;
       mudou = true;
       enviados++;

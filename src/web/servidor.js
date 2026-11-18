@@ -34,6 +34,15 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     horaInicio: config.sgp.horaSincronizacao,
   });
 
+  // Quem grava comentários nas ocorrências: com o usuário da integração (rota da tela, marca de verdade)
+  // ou, sem ele, pela API via OS da ocorrência.
+  const comentador = !modoDemo && config.sgp.modo === 'api'
+    ? require('../integracoes/sgp/comentador').criarComentador({
+      origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token,
+      usuarioIntegracao: config.sgp.usuarioIntegracao, senhaIntegracao: config.sgp.senhaIntegracao,
+    })
+    : null;
+
   // Botão "Criar no SGP": no modo demonstração usa um SGP de mentira; no real, só com SGP_CRIAR_OCORRENCIA=sim.
   let criarOcorrenciaSgp = null;
   if (modoDemo) {
@@ -48,9 +57,10 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
         metodo: config.sgp.metodoOcorrencia, usuario: usuarioSgp || config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
       });
       try {
-        await oc.comentarOcorrencia({
+        await comentador.comentar({
           numero: criada.protocolo,
-          texto: `Ocorrência criada pelo sistema de cobrança (Têmis) por ${por || 'usuário do sistema'}.${responsavel ? ` @${responsavel}` : ''}`,
+          texto: `[Têmis] Ocorrência criada pelo sistema de cobrança por ${por || 'usuário do sistema'}.`,
+          marcar: [responsavel],
         });
       } catch (erro) {
         criada.aviso = `A ocorrência foi criada, mas o comentário não: ${erro.message}`;
@@ -64,10 +74,8 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   // Comentários automáticos na ocorrência do contrato (GRAVA no SGP): SGP_COMENTAR_OCORRENCIA=sim.
   let comentarOcorrenciaSgp = null;
   if (!modoDemo && config.sgp.modo === 'api' && config.sgp.comentarOcorrencia) {
-    const { criarApiOcorrencias } = require('../integracoes/sgp/ocorrencias');
-    const ocC = criarApiOcorrencias({ origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token });
-    comentarOcorrenciaSgp = ({ numero, texto }) => ocC.comentarOcorrencia({ numero, texto });
-    console.log('Comentários automáticos nas ocorrências do SGP: LIGADO.');
+    comentarOcorrenciaSgp = (dados) => comentador.comentar(dados);
+    console.log(`Comentários automáticos nas ocorrências do SGP: LIGADO (${comentador.usaLogin ? 'usuário da integração' : 'API, só ocorrências com OS'}).`);
   }
 
   // Avisos pendentes na ocorrência (ex.: marcar quem abre a OS de retirada). Só com comentários ligados.

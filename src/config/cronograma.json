@@ -142,7 +142,7 @@
       "dias": 30,
       "decisao": {
         "pergunta": "Os equipamentos foram devolvidos ou retirados?",
-        "sim": "finalizacao-cancelamento",
+        "sim": "abertura-pos-cancelamento",
         "nao": "indenizacao"
       }
     },
@@ -154,7 +154,7 @@
       "acoes": [
         "Gerar cobrança de indenização dos equipamentos"
       ],
-      "proxima": "finalizacao-cancelamento"
+      "proxima": "abertura-pos-cancelamento"
     },
     {
       "id": "finalizacao-cancelamento",
@@ -165,6 +165,20 @@
         "Classificar e finalizar o processo"
       ],
       "resultado": "cancelado"
+    },
+    {
+      "id": "abertura-pos-cancelamento",
+      "nome": "Abertura da negativação pós-cancelamento",
+      "fase": "Pós-cancelamento",
+      "tipo": "acao",
+      "acoes": [
+        "Abrir ocorrência de negativação pós-cancelamento no SGP"
+      ],
+      "ocorrenciaSgp": {
+        "acao": "Abrir ocorrência de negativação pós-cancelamento no SGP",
+        "tipo": "Financeiro - Negativação pós Cancelamento"
+      },
+      "proxima": "notificacao-pos-cancelamento"
     },
     {
       "id": "notificacao-pos-cancelamento",
@@ -215,7 +229,8 @@
         "Negativado",
         "Aviso de cancelamento",
         "Cancelamento",
-        "Equipamentos"
+        "Equipamentos",
+        "Pós-cancelamento"
       ]
     },
     {

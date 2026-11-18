@@ -69,10 +69,15 @@ test('fluxo completo até o cancelamento', () => {
   decidir(p, 'nao', '2027-01-11');
 
   assert.strictEqual(p.etapaAtual, 'indenizacao');
-  concluirTodas(p, 'acao', '2027-01-11');
-  concluirTodas(p, 'acao', '2027-01-11');
+  concluirTodas(p, 'acao', '2027-01-11'); // indenização
+  assert.strictEqual(p.etapaAtual, 'abertura-pos-cancelamento');
+  concluirTodas(p, 'acao', '2027-01-11'); // abre a ocorrência de pós-cancelamento
+  assert.strictEqual(p.etapaAtual, 'notificacao-pos-cancelamento');
+  concluirTodas(p, 'contato', '2027-01-15');
+  decidir(p, 'nao', '2027-01-18');
+  concluirTodas(p, 'acao', '2027-01-18'); // encerra a ocorrência
   assert.strictEqual(p.status, 'finalizado');
-  assert.strictEqual(p.resultado, 'cancelado');
+  assert.strictEqual(p.resultado, 'negativado');
 });
 
 test('decisão exige resposta e observação', () => {
@@ -147,4 +152,22 @@ test('promessa cumprida vai para a liberação; data no passado é recusada', ()
   registrarPromessa(p, { dataPromessa: '2026-11-20', por: 'J', data: '2026-11-17' }, cronograma);
   decidir(p, 'sim', '2026-11-20');
   assert.strictEqual(p.etapaAtual, 'liberacao');
+});
+
+test('depois da retirada de equipamentos o processo segue para a negativação pós-cancelamento', () => {
+  const { posicionar } = require('../src/cronograma/motor');
+  for (const resposta of ['sim', 'nao']) {
+    const p = novo('2026-11-16');
+    posicionar(p, { etapaId: 'retirada-equipamentos', dataReferencia: '2026-11-10', por: 'J', data: '2026-11-18' }, cronograma);
+    decidir(p, resposta, '2026-11-18');
+    if (resposta === 'nao') {
+      assert.strictEqual(p.etapaAtual, 'indenizacao');
+      concluirTodas(p, 'acao', '2026-11-18');
+    }
+    assert.strictEqual(p.etapaAtual, 'abertura-pos-cancelamento');
+    assert.ok(pendentes(p, 'acao').some((t) => t.descricao === 'Abrir ocorrência de negativação pós-cancelamento no SGP'));
+    concluirTodas(p, 'acao', '2026-11-18');
+    assert.strictEqual(p.etapaAtual, 'notificacao-pos-cancelamento');
+    assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-18', '2026-11-20', '2026-11-24']);
+  }
 });

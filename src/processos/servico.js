@@ -44,8 +44,17 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
 async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }) {
   const lista = await sgp.listarPosCancelamento();
   const novos = [];
+  // Contratos cujo processo principal já está na fase pós-cancelamento (a ocorrência foi aberta
+  // pelo próprio sistema depois da retirada de equipamentos): não abre um segundo processo.
+  const { obterEtapa } = require('../cronograma/motor');
+  const jaNoPrincipal = new Set();
+  for (const p of await repositorio.listar()) {
+    if (p.status !== 'ativo' || (p.fluxo || 'principal') !== 'principal' || !p.etapaAtual) continue;
+    if (obterEtapa(cronograma, p.etapaAtual).fase === 'Pós-cancelamento') jaNoPrincipal.add(String(p.cliente.contrato));
+  }
   for (const item of lista) {
     const chave = `pos-${item.contrato}`;
+    if (jaNoPrincipal.has(String(item.contrato))) continue;
     if (await repositorio.processoAtivoDoCliente(chave)) continue;
     const processo = criarProcesso({
       id: await repositorio.proximoId(),

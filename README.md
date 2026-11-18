@@ -26,9 +26,13 @@ Bloqueado há 1 dia
                                       ├─ sim → retirar negativação, desbloquear  (FIM: regularizado)
                                       └─ não → cancelar contrato, notificar, multa se houver
                                                fidelidade, abrir OS de retirada de equipamentos
-                                               └─ 30 dias → Equipamentos devolvidos?
-                                                    ├─ sim → classificar e finalizar  (FIM: cancelado)
-                                                    └─ não → cobrar indenização, finalizar  (FIM: cancelado)
+                                               └─ 30 dias → Equipamentos devolvidos? (dá para responder antes)
+                                                    ├─ sim ─┐
+                                                    └─ não → cobrar indenização ─┤
+                                                    abrir ocorrência de negativação pós-cancelamento (marca a Jéssica)
+                                                    → 3 avisos dia sim/dia não → Regularizou?
+                                                      ├─ sim → retirar negativação, encerrar  (FIM: regularizado)
+                                                      └─ não → encerrar a ocorrência  (FIM: negativado)
 ```
 
 Em cada pergunta "Regularizou?", o funcionário responde **sim** ou **não** e explica

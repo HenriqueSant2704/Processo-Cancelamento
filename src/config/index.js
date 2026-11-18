@@ -47,6 +47,8 @@ module.exports = {
     comentarOcorrencia: /^(sim|true|1)$/i.test(process.env.SGP_COMENTAR_OCORRENCIA || ''),
     // Quem é marcado para abrir a OS de retirada de equipamentos (username do SGP).
     responsavelOs: (process.env.SGP_RESPONSAVEL_OS || '').trim(),
+    // Supervisor (ex.: Lucas): marcado no fim de cada etapa (username do SGP).
+    supervisor: (process.env.SGP_SUPERVISOR || '').trim(),
     // Usuário próprio da integração no SGP (para comentar em ocorrência pela rota da tela).
     usuarioIntegracao: (process.env.SGP_USUARIO_INTEGRACAO || '').trim(),
     senhaIntegracao: process.env.SGP_SENHA_INTEGRACAO || '',

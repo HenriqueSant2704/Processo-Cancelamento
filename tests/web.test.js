@@ -150,3 +150,24 @@ test('comentários automáticos na ocorrência a cada ação (quando ligado)', a
   assert.match(comentarios[0].texto, /@jessica_rasteiro/);
   assert.match(comentarios[1].texto, /Promessa de pagamento para 20\/11\/2026/);
 });
+
+test('fim de etapa marca o supervisor e o início da próxima marca a responsável', async (t) => {
+  const { criarProcesso } = require('../src/cronograma/motor');
+  const repositorio = new RepositorioJson(null);
+  const cronograma = carregarCronograma();
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.ocorrencia = { numero: '999' };
+  await repositorio.salvarProcesso(p);
+  const comentarios = [];
+  const { chamar } = subir(t, { repositorio, modoDemo: true, responsavelSgp: 'jessica_rasteiro', supervisorSgp: 'lucas_sgp', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao');
+  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno nas 3 tentativas' });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(comentarios.length, 2);
+  assert.deepStrictEqual(comentarios[0].marcar, ['lucas_sgp']);
+  assert.match(comentarios[0].texto, /NÃO regularizou/);
+  assert.match(comentarios[0].texto, /Posso dar continuidade\?/);
+  assert.deepStrictEqual(comentarios[1].marcar, ['jessica_rasteiro']);
+  assert.match(comentarios[1].texto, /Nova etapa iniciada: "Negativação"/);
+  assert.match(comentarios[1].texto, /Negativar o cliente/);
+});

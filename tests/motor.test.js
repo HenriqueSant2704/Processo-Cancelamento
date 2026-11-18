@@ -54,18 +54,18 @@ test('fluxo completo até o cancelamento', () => {
   assert.strictEqual(p.etapaAtual, 'negativacao');
   concluirTodas(p, 'acao', '2026-11-23');
   assert.strictEqual(p.etapaAtual, 'aguardo-negativado');
-  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-08']); // 15 dias depois
-  decidir(p, 'nao', '2026-12-08');
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-03']); // 10 dias corridos depois
+  decidir(p, 'nao', '2026-12-03');
 
   assert.strictEqual(p.etapaAtual, 'aviso-cancelamento');
-  assert.deepStrictEqual(datas(p, 'contato'), ['2026-12-08', '2026-12-10']); // dia sim, dia não
-  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-11']); // dia útil seguinte ao último aviso
-  decidir(p, 'nao', '2026-12-11');
+  assert.deepStrictEqual(datas(p, 'contato'), ['2026-12-03', '2026-12-07']); // dia sim, dia não (pula o fim de semana)
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-12-08']); // dia útil seguinte ao último aviso
+  decidir(p, 'nao', '2026-12-08');
 
   assert.strictEqual(p.etapaAtual, 'cancelamento');
-  concluirTodas(p, 'acao', '2026-12-11');
+  concluirTodas(p, 'acao', '2026-12-08');
   assert.strictEqual(p.etapaAtual, 'retirada-equipamentos');
-  assert.deepStrictEqual(datas(p, 'decisao'), ['2027-01-11']); // 30 dias (cai no domingo, vai para segunda)
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2027-01-07']); // 30 dias
   decidir(p, 'nao', '2027-01-11');
 
   assert.strictEqual(p.etapaAtual, 'indenizacao');
@@ -114,7 +114,7 @@ test('ajustar etapa: cliente já negativado, espera conta da data real', () => {
   const p = novo('2026-11-17');
   posicionar(p, { etapaId: 'aguardo-negativado', dataReferencia: '2026-11-05', por: 'Jessica', data: '2026-11-17' }, cronograma);
   assert.strictEqual(p.etapaAtual, 'aguardo-negativado');
-  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-20']); // 05/11 + 15 dias
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-16']); // 05/11 + 10 dias = 15/11 (domingo) -> segunda
   assert.strictEqual(datas(p, 'contato').length, 0); // avisos antigos cancelados
 });
 

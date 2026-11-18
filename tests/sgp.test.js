@@ -276,3 +276,16 @@ test('não duplica: contrato cujo processo principal já está no pós-cancelame
   const sgp = { listarPosCancelamento: async () => [{ contrato: '77', nome: 'X', ocorrencia: { numero: '1', abertaEm: '2026-11-18' } }] };
   assert.strictEqual((await sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje: '2026-11-18' })).novos.length, 0);
 });
+
+test('feriado do SGP: avisos marcados no feriado vão para o próximo dia útil', async () => {
+  const { atualizarFeriados, reajustarAgenda } = require('../src/processos/servico');
+  const { criarProcesso } = require('../src/cronograma/motor');
+  const cronograma = JSON.parse(JSON.stringify(carregarCronograma()));
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '1', nome: 'A', contrato: '1' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-18', cronograma });
+  await repositorio.salvarProcesso(p); // avisos 18 (qua), 20 (sex), 24 (ter)
+  atualizarFeriados(cronograma, ['2026-11-20']); // Consciência Negra
+  assert.strictEqual(await reajustarAgenda({ repositorio, cronograma, hoje: '2026-11-18' }), 1);
+  const datasContato = (await repositorio.obter('1')).tarefas.filter((t) => t.tipo === 'contato').map((t) => t.data);
+  assert.deepStrictEqual(datasContato, ['2026-11-18', '2026-11-23', '2026-11-24']);
+});

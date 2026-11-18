@@ -73,7 +73,7 @@
       "nome": "Aguardo após negativação",
       "fase": "Negativado",
       "tipo": "aguardo",
-      "dias": 15,
+      "dias": 10,
       "decisao": {
         "pergunta": "O cliente regularizou a dívida após a negativação?",
         "sim": "retirada-negativacao",

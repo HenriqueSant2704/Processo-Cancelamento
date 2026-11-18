@@ -55,6 +55,22 @@ function criarFonteApi(config, opcoesApi = {}) {
       }
       return porContrato;
     },
+    // Feriados cadastrados no SGP (os recorrentes valem para este ano e os 2 próximos).
+    async listarFeriados() {
+      const { getComCorpo } = require('./ocorrencias');
+      const r = await getComCorpo(`${new URL(config.sgp.uraClientesUrl).origin}/api/model/feriado/`, { app: config.sgp.app, token: config.sgp.token }, 60_000);
+      if (r.status !== 200) throw new Error(`HTTP ${r.status} (feriados)`);
+      const lista = JSON.parse(r.texto);
+      const datas = new Set();
+      const ano = new Date().getFullYear();
+      for (const f of Array.isArray(lista) ? lista : []) {
+        const d = lerData(f && f.data);
+        if (!d) continue;
+        datas.add(d);
+        if (f.feriado_recorrente) for (let a = ano; a <= ano + 2; a++) datas.add(`${a}${d.slice(4)}`);
+      }
+      return [...datas].sort();
+    },
     // Contratos com ocorrência ABERTA de negativação pós-cancelamento.
     async listarPosCancelamento() {
       const origem = new URL(config.sgp.uraClientesUrl).origin;

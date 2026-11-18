@@ -34,6 +34,27 @@ function textoComentario(evento, { responsavel } = {}) {
     case 'ajuste':
       corpo = `[Têmis] Etapa ajustada para "${evento.etapa}" (atendimento feito antes do sistema).\nRegistrado por ${quem}.`;
       break;
+    // Fim de etapa: comunicado ao supervisor, pedindo autorização para seguir quando for o caso.
+    case 'fim-etapa': {
+      const tentativas = evento.etapaTipo === 'contatos' && evento.contatos ? ` Foram feitas ${evento.contatos} tentativas de contato.` : '';
+      if (evento.resposta === 'sim') {
+        corpo = `[Têmis] Etapa "${evento.etapa}" encerrada: o cliente REGULARIZOU as pendências.${tentativas}`;
+      } else if (evento.resposta === 'nao') {
+        corpo = `[Têmis] Etapa "${evento.etapa}" encerrada: o cliente NÃO regularizou as pendências.${tentativas}`
+          + (evento.proximaEtapa ? `\nPróxima etapa: ${evento.proximaEtapa}. Posso dar continuidade?` : '');
+      } else {
+        corpo = `[Têmis] Etapa "${evento.etapa}" concluída.` + (evento.proximaEtapa ? `\nPróxima etapa: ${evento.proximaEtapa}.` : '');
+      }
+      if (!evento.proximaEtapa && evento.resultado) corpo += `\nProcesso finalizado: ${evento.resultado}.`;
+      corpo += `\nRegistrado por ${quem}.`;
+      break;
+    }
+    // Início de etapa: comunicado à responsável com o que fazer.
+    case 'inicio-etapa': {
+      const lista = (evento.tarefas || []).map((t) => `- ${t.descricao} (${dataBR(t.data)})`).join('\n');
+      corpo = `[Têmis] Nova etapa iniciada: "${evento.etapa}".${lista ? `\nA fazer:\n${lista}` : ''}`;
+      break;
+    }
     default:
       corpo = `[Têmis] ${evento.descricao || 'Atualização no processo'}.\nRegistrado por ${quem}.`;
   }

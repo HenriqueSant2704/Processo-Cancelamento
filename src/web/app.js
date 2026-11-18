@@ -119,16 +119,36 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
 //           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado),
 //           comentarOcorrenciaSgp ({ numero, texto }) (null = sem comentários automáticos), responsavelSgp }
 function criarApp(opcoes) {
-  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '' } = opcoes;
+  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '', supervisorSgp = '' } = opcoes;
   // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
+  // Os comentários de um mesmo processo saem em ordem (fim de etapa antes do início da próxima).
+  let fila = Promise.resolve();
   const comentar = (processo, evento) => {
     // Depois de qualquer ação, confere avisos pendentes (ex.: OS de retirada que acabou de ficar para hoje).
     if (typeof opcoes.aposAcao === 'function') Promise.resolve().then(opcoes.aposAcao).catch(() => {});
     if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
-    const texto = textoComentario(evento, { responsavel: responsavelSgp });
-    Promise.resolve(comentarOcorrenciaSgp({ numero: processo.ocorrencia.numero, texto, marcar: [responsavelSgp] }))
-      .catch((erro) => console.error(`Comentário na ocorrência ${processo.ocorrencia.numero} falhou: ${erro.message}`));
+    const marcar = evento.marcar || [responsavelSgp];
+    const texto = textoComentario(evento, { responsavel: marcar[0] });
+    const numero = processo.ocorrencia.numero;
+    fila = fila.then(() => comentarOcorrenciaSgp({ numero, texto, marcar }))
+      .catch((erro) => console.error(`Comentário na ocorrência ${numero} falhou: ${erro.message}`));
   };
+  // Mudou de etapa: avisa o supervisor (fim da etapa) e a responsável (início da próxima).
+  const avisarTrocaDeEtapa = (processo, { etapaAnteriorId, tarefa, por }) => {
+    const anterior = obterEtapa(cronograma, etapaAnteriorId);
+    const nova = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
+    const contatos = processo.tarefas.filter((t) => t.etapa === anterior.id && t.tipo === 'contato' && t.status === 'concluida').length;
+    comentar(processo, {
+      tipo: 'fim-etapa', etapa: anterior.nome, etapaTipo: anterior.tipo, contatos, resposta: tarefa.resposta,
+      proximaEtapa: nova ? nova.nome : null, resultado: processo.resultado, por, data: hoje(), observacao: tarefa.observacao,
+      marcar: [supervisorSgp || responsavelSgp],
+    });
+    if (nova) {
+      const afazer = processo.tarefas.filter((t) => t.etapa === nova.id && t.status === 'pendente');
+      comentar(processo, { tipo: 'inicio-etapa', etapa: nova.nome, tarefas: afazer, por, data: hoje(), marcar: [responsavelSgp] });
+    }
+  };
+  const hoje = () => hojeISO();
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
     executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
@@ -295,10 +315,16 @@ function criarApp(opcoes) {
             resposta: corpo.resposta,
             data: hoje,
           });
-          const proxima = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual).nome : null;
-          comentar(processo, tarefa.tipo === 'decisao'
-            ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), proximaEtapa: proxima, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao }
-            : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
+          const trocouEtapa = processo.etapaAtual !== tarefa.etapa;
+          if (trocouEtapa) {
+            // Fim de etapa: comentário para o supervisor (Lucas) e, se houver, início da próxima para a Jéssica.
+            if (tarefa.tipo !== 'decisao') comentar(processo, { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
+            avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor });
+          } else {
+            comentar(processo, tarefa.tipo === 'decisao'
+              ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao }
+              : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
+          }
           return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);

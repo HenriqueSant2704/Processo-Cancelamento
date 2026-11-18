@@ -91,6 +91,13 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     }
   }
 
+  // Feriados do SGP já ao iniciar (a sincronização diária atualiza de novo).
+  if (!modoDemo && config.sgp.modo === 'api') {
+    Promise.resolve(criarSgp(hojeISO()).listarFeriados())
+      .then((datas) => { servico.atualizarFeriados(cronograma, datas); console.log(`Feriados do SGP carregados: ${datas.length}.`); })
+      .catch((erro) => console.error(`Não consegui ler os feriados do SGP: ${erro.message}`));
+  }
+
   // Com o SGP real, sincroniza sozinho uma vez por dia (a partir de SGP_HORA_SINCRONIZACAO, padrão 7h).
   if (!modoDemo && config.sgp.modo === 'api' && config.sgp.sincronizacaoAutomatica) {
     sincronizador.iniciarAgenda();
@@ -102,6 +109,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     criarOcorrenciaSgp,
     comentarOcorrenciaSgp,
     responsavelSgp: config.sgp.responsavelOcorrencia,
+    supervisorSgp: config.sgp.supervisor,
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,
     cronograma,

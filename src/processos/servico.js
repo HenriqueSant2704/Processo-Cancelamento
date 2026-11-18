@@ -100,6 +100,43 @@ async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, 
   return enviados;
 }
 
+// Junta os feriados do SGP aos do cronograma (o motor usa cronograma.feriados).
+function atualizarFeriados(cronograma, datas) {
+  cronograma.feriados = [...new Set([...(cronograma.feriados || []), ...datas])].sort();
+}
+
+// Reajusta a agenda dos processos ativos:
+//  - tarefa pendente marcada para sábado, domingo ou feriado vai para o próximo dia útil;
+//  - pergunta de etapa de espera (ex.: 10 dias depois da negativação) é recalculada se o prazo mudou.
+async function reajustarAgenda({ repositorio, cronograma, hoje }) {
+  const { obterEtapa } = require('../cronograma/motor');
+  const { proximoDiaUtil, adicionarDias, ehDiaUtil } = require('../utils/datas');
+  const feriados = cronograma.feriados || [];
+  let ajustadas = 0;
+  for (const resumo of await repositorio.listar()) {
+    if (resumo.status !== 'ativo') continue;
+    const precisa = resumo.tarefas.some((t) => t.status === 'pendente' && (t.tipo === 'decisao' || (t.data >= hoje && !ehDiaUtil(t.data, feriados))));
+    if (!precisa) continue;
+    const processo = await repositorio.obter(resumo.id);
+    if (!processo) continue;
+    let mudou = false;
+    for (const t of processo.tarefas) {
+      if (t.status !== 'pendente') continue;
+      let nova = t.data;
+      const etapa = obterEtapa(cronograma, t.etapa);
+      if (t.tipo === 'decisao' && etapa.tipo === 'aguardo' && !t.promessa) {
+        const inicio = [...processo.historico].reverse().find((h) => h.evento === 'etapa-iniciada' && h.detalhes === etapa.nome);
+        if (inicio) nova = proximoDiaUtil(adicionarDias(inicio.data, etapa.dias), feriados);
+      } else if (t.data >= hoje && !ehDiaUtil(t.data, feriados)) {
+        nova = proximoDiaUtil(t.data, feriados);
+      }
+      if (nova !== t.data) { t.data = nova; mudou = true; ajustadas++; }
+    }
+    if (mudou) await repositorio.salvarProcesso(processo);
+  }
+  return ajustadas;
+}
+
 // Liga cada processo de suspenso à ocorrência aberta do contrato no SGP (para os comentários automáticos).
 async function vincularOcorrencias({ sgp, repositorio }) {
   const porContrato = await sgp.listarOcorrenciasDoFluxoPrincipal();
@@ -119,6 +156,13 @@ async function vincularOcorrencias({ sgp, repositorio }) {
 // se uma falhar (ex.: SGP lento), a outra ainda é gravada; o erro é repassado no fim.
 async function sincronizarTudo(args) {
   const erros = [];
+  if (typeof args.sgp.listarFeriados === 'function') {
+    try {
+      atualizarFeriados(args.cronograma, await args.sgp.listarFeriados());
+    } catch (erro) {
+      erros.push(`feriados: ${erro.message}`);
+    }
+  }
   let pos = { totalPosCancelamento: 0, novos: [] };
   if (typeof args.sgp.listarPosCancelamento === 'function') {
     try {
@@ -139,6 +183,11 @@ async function sincronizarTudo(args) {
     } catch (erro) {
       erros.push(`ocorrências: ${erro.message}`);
     }
+  }
+  try {
+    await reajustarAgenda(args);
+  } catch (erro) {
+    erros.push(`reajuste da agenda: ${erro.message}`);
   }
   const resultado = { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
   if (erros.length) {
@@ -195,4 +244,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

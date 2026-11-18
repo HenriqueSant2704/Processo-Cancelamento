@@ -369,7 +369,13 @@
         el('span', { class: 'lt-ponto', html: t.status === 'concluida' ? ICONES.check : t.status === 'cancelada' ? ICONES.traco : '' }),
         el('div', { class: 'lt-corpo' },
           el('strong', {}, t.descricao), el('small', {}, sub),
-          t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null),
+          t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null,
+          // Pergunta agendada para o futuro: dá para responder antes (ex.: equipamentos já devolvidos).
+          t.status === 'pendente' && t.tipo === 'decisao' && t.data > hoje() && !fim
+            ? el('div', { class: 'lt-acoes' }, el('span', {}, 'Já aconteceu? Responder agora:'),
+                el('button', { class: 'botao sim pequeno', onclick: () => abrirDecisao(d, t, 'sim') }, ico('check'), 'Sim'),
+                el('button', { class: 'botao nao pequeno', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'))
+            : null),
         el('span', { class: 'lt-data' }, dataCurta(t.data))));
     }
 

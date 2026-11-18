@@ -42,10 +42,23 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   } else if (config.sgp.modo === 'api' && config.sgp.criarOcorrencia) {
     const { criarApiOcorrencias } = require('../integracoes/sgp/ocorrencias');
     const oc = criarApiOcorrencias({ origem: new URL(config.sgp.uraClientesUrl).origin, app: config.sgp.app, token: config.sgp.token });
-    criarOcorrenciaSgp = ({ contrato, tipoNome, conteudo, usuarioSgp }) => oc.criarOcorrencia({
-      contrato, tipoNome, conteudo,
-      metodo: config.sgp.metodoOcorrencia, usuario: usuarioSgp || config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
-    });
+    criarOcorrenciaSgp = async ({ contrato, tipoNome, conteudo, usuarioSgp, por }) => {
+      const responsavel = config.sgp.responsavelOcorrencia;
+      const criada = await oc.criarOcorrencia({
+        contrato, tipoNome, conteudo, responsavel,
+        metodo: config.sgp.metodoOcorrencia, usuario: usuarioSgp || config.sgp.usuarioOcorrencia, abrirOs: config.sgp.abrirOsJunto,
+      });
+      try {
+        await oc.comentarOcorrencia({
+          numero: criada.protocolo,
+          texto: `Ocorrência criada pelo sistema de cobrança (Têmis) por ${por || 'usuário do sistema'}.${responsavel ? ` @${responsavel}` : ''}`,
+        });
+      } catch (erro) {
+        criada.aviso = `A ocorrência foi criada, mas o comentário não: ${erro.message}`;
+        console.error(criada.aviso);
+      }
+      return criada;
+    };
     console.log('Criar ocorrência no SGP pelo sistema: LIGADO.');
   }
 

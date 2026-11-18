@@ -82,7 +82,26 @@ function criarApiOcorrencias({ origem, app, token, buscar = fetch, buscarTipos =
 
   // ESCRITA: cria uma ocorrência (chamado) no SGP.  POST {origem}/api/ura/chamado/
   // tipoNome: nome do tipo como está no SGP (ex.: "Financeiro - Negativação"); o código é buscado na lista de tipos.
-  async function criarOcorrencia({ contrato, tipoNome, conteudo, metodo, usuario, abrirOs = false }) {
+  // ESCRITA: comentário numa ocorrência. Acha o ID interno pela numeração (protocolo) e grava o comentário.
+  async function comentarOcorrencia({ numero, texto: comentario }) {
+    const achadas = await listarOcorrencias({ ocorrencia: String(numero) });
+    const alvo = achadas.find((o) => texto(o.numero, 40) === String(numero));
+    if (!alvo || !alvo.id) throw new ErroSgp(`Ocorrência ${numero} não encontrada no SGP para comentar.`);
+    let resposta;
+    try {
+      resposta = await buscar(`${origem}/api/os/ocorrencia/comentario/add/id/${encodeURIComponent(alvo.id)}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ app, token, anotacao: comentario }),
+        signal: AbortSignal.timeout(tempoLimiteMs),
+      });
+    } catch {
+      throw new ErroSgp('Não foi possível conectar ao SGP para comentar.');
+    }
+    if (!resposta.ok) throw new ErroSgp(`O SGP não gravou o comentário (HTTP ${resposta.status}).`);
+  }
+
+  async function criarOcorrencia({ contrato, tipoNome, conteudo, metodo, usuario, responsavel, abrirOs = false }) {
     if (!contrato) throw new ErroSgp('Contrato não informado.');
     const tipos = await listarTipos();
     const tipo = tipos.find((t) => normalizar(t.descricao) === normalizar(tipoNome));
@@ -90,7 +109,8 @@ function criarApiOcorrencias({ origem, app, token, buscar = fetch, buscarTipos =
     const corpo = { app, token, contrato: Number(contrato), ocorrenciatipo: tipo.codigo, conteudo, conteudolimpo: 1 };
     if (!abrirOs) corpo.desativa_os = 1;
     if (metodo) corpo.metodo = Number(metodo);
-    if (usuario) { corpo.usuario = usuario; corpo.responsaveloc = usuario; }
+    if (usuario) corpo.usuario = usuario;
+    if (responsavel || usuario) corpo.responsaveloc = responsavel || usuario;
     let resposta;
     try {
       resposta = await buscar(`${origem}/api/ura/chamado/`, {
@@ -112,7 +132,7 @@ function criarApiOcorrencias({ origem, app, token, buscar = fetch, buscarTipos =
     return { protocolo: texto(dados.protocolo, 40), tipo: tipo.descricao };
   }
 
-  return { listarTipos, idDoTipo, listarOcorrencias, criarOcorrencia };
+  return { listarTipos, idDoTipo, listarOcorrencias, criarOcorrencia, comentarOcorrencia };
 }
 
 // Ocorrências ABERTAS (não encerradas) -> um item por contrato, ficando com a mais antiga.

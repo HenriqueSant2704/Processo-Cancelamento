@@ -525,6 +525,7 @@
       const r = await api(`/api/tarefas/${ocorrenciaAtual.t.id}/ocorrencia`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, conteudo: f.conteudo.value }) });
       $('#janela-ocorrencia').close();
       avisar(`Ocorrência ${r.protocolo} criada no SGP`);
+      if (r.aviso) avisar(r.aviso, 'erro');
       await aposAcao();
     } catch (erro) {
       avisar(erro.message, 'erro');

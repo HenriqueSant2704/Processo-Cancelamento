@@ -172,16 +172,16 @@ function criarApp(opcoes) {
         if (!criarOcorrenciaSgp) throw new ErroHttp(403, 'Criar ocorrência pelo sistema está desligado (SGP_CRIAR_OCORRENCIA).');
         const corpo = await lerCorpo(req);
         try {
-          const { processo, protocolo } = await servico.criarOcorrenciaDaTarefa({
+          const { processo, protocolo, aviso } = await servico.criarOcorrenciaDaTarefa({
             repositorio,
             cronograma,
             tarefaId: m[1],
             conteudo: typeof corpo.conteudo === 'string' ? corpo.conteudo.slice(0, 2000) : '',
             por: usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : undefined),
             data: hojeISO(),
-            criar: (dados) => criarOcorrenciaSgp({ ...dados, usuarioSgp: usuario && usuario.sgpLogin ? usuario.sgpLogin : null }),
+            criar: (dados) => criarOcorrenciaSgp({ ...dados, usuarioSgp: usuario && usuario.sgpLogin ? usuario.sgpLogin : null, por: usuario ? usuario.nome : corpo.por }),
           });
-          return responderJson(res, 200, { protocolo, detalhe: visao.detalheProcesso(processo, hojeISO(), cronograma) });
+          return responderJson(res, 200, { protocolo, aviso, detalhe: visao.detalheProcesso(processo, hojeISO(), cronograma) });
         } catch (erro) {
           console.error(`Criar ocorrência (tarefa ${m[1]}): ${erro.message}`);
           throw new ErroHttp(400, erro.message);

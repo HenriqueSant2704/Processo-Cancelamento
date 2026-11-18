@@ -41,6 +41,8 @@ module.exports = {
     usuarioOcorrencia: (process.env.SGP_USUARIO_OCORRENCIA || '').trim(), // username do SGP que aparece como quem abriu
     metodoOcorrencia: (process.env.SGP_METODO_OCORRENCIA || '').trim(), // código do método (ex.: 5 = WhatsApp)
     abrirOsJunto: /^(sim|true|1)$/i.test(process.env.SGP_ABRIR_OS || ''),
+    // Responsável da ocorrência criada pelo sistema e quem é citado no comentário (username do SGP).
+    responsavelOcorrencia: (process.env.SGP_RESPONSAVEL_OCORRENCIA || '').trim(),
   },
   carregarCronograma,
 };

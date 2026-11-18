@@ -114,7 +114,7 @@ async function criarOcorrenciaDaTarefa({ repositorio, cronograma, tarefaId, cont
       concluirTarefa(atual, tarefaId, { por, data, observacao }, cronograma);
       atual.ocorrencia = { numero: criada.protocolo };
       await repositorio.salvarProcesso(atual);
-      return { processo: atual, protocolo: criada.protocolo };
+      return { processo: atual, protocolo: criada.protocolo, aviso: criada.aviso || null };
     } catch (erro) {
       if (tentativa >= 3) throw new Error(`${observacao} Mas não consegui registrar aqui: ${erro.message} Marque a tarefa como feita manualmente.`);
     }

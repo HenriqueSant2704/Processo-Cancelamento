@@ -62,6 +62,35 @@ async function sincronizarPosCancelamento({ sgp, repositorio, cronograma, hoje }
   return { totalPosCancelamento: lista.length, novos };
 }
 
+// Avisos na ocorrência para outra pessoa (cronograma: etapa.avisarSgp). Cada tarefa avisa UMA vez,
+// quando fica pendente para hoje ou antes. destinatarios: { os: 'username_no_sgp' }.
+async function enviarAvisosPendentes({ repositorio, cronograma, hoje, comentar, destinatarios = {} }) {
+  if (typeof comentar !== 'function') return 0;
+  const { obterEtapa } = require('../cronograma/motor');
+  let enviados = 0;
+  for (const resumo of await repositorio.listar()) {
+    if (resumo.status !== 'ativo') continue;
+    const candidatas = resumo.tarefas.filter((t) => t.status === 'pendente' && t.data <= hoje && !t.avisadoEm);
+    if (!candidatas.length) continue;
+    const processo = await repositorio.obter(resumo.id);
+    if (!processo || !processo.ocorrencia || !processo.ocorrencia.numero) continue;
+    let mudou = false;
+    for (const t of processo.tarefas) {
+      if (t.status !== 'pendente' || t.data > hoje || t.avisadoEm) continue;
+      const regra = (obterEtapa(cronograma, t.etapa).avisarSgp || []).find((a) => a.acao === t.descricao);
+      if (!regra) continue;
+      const para = destinatarios[regra.para];
+      const texto = `[Têmis] ${regra.texto}\nContrato ${processo.cliente.contrato}.${para ? `\n@${para}` : ''}`;
+      await comentar({ numero: processo.ocorrencia.numero, texto });
+      t.avisadoEm = hoje;
+      mudou = true;
+      enviados++;
+    }
+    if (mudou) await repositorio.salvarProcesso(processo);
+  }
+  return enviados;
+}
+
 // Liga cada processo de suspenso à ocorrência aberta do contrato no SGP (para os comentários automáticos).
 async function vincularOcorrencias({ sgp, repositorio }) {
   const porContrato = await sgp.listarOcorrenciasDoFluxoPrincipal();
@@ -157,4 +186,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

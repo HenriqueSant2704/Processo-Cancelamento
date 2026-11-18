@@ -5,7 +5,8 @@
     "Intervalos em DiasUteis contam de segunda a sexta, pulando os feriados da lista (formato AAAA-MM-DD).",
     "Tipos de etapa: contatos (tentativas e depois a decisão), acao (tarefas; ao concluir todas vai para a proxima), aguardo (espera dias corridos e depois pergunta a decisão) e final (tarefas de encerramento).",
     "Fluxos: \"principal\" começa pela suspensão no SGP; \"pos-cancelamento\" começa pelas ocorrências abertas do tipo \"Financeiro - Negativação pós Cancelamento\".",
-    "ocorrenciaSgp: a ação indicada ganha o botão \"Criar no SGP\", que abre uma ocorrência do tipo informado (nome igual ao do SGP)."
+    "ocorrenciaSgp: a ação indicada ganha o botão \"Criar no SGP\", que abre uma ocorrência do tipo informado (nome igual ao do SGP).",
+    "avisarSgp: quando a ação fica pendente, o sistema comenta UMA vez na ocorrência do contrato marcando a pessoa (\"para\": os = SGP_RESPONSAVEL_OS)."
   ],
   "feriados": [],
   "entrada": {
@@ -124,7 +125,14 @@
         "Verificar fidelidade: se ativa, gerar multa",
         "Abrir OS de retirada de equipamentos"
       ],
-      "proxima": "retirada-equipamentos"
+      "proxima": "retirada-equipamentos",
+      "avisarSgp": [
+        {
+          "acao": "Abrir OS de retirada de equipamentos",
+          "para": "os",
+          "texto": "Cliente na etapa de Cancelamento: é preciso ABRIR A OS DE RETIRADA DE EQUIPAMENTOS deste contrato."
+        }
+      ]
     },
     {
       "id": "retirada-equipamentos",

@@ -245,3 +245,22 @@ test('data real da suspensão (Contrato – Listar) tem prioridade e corrige pro
   await sincronizar({ sgp: { listarClientesBloqueados: async () => [c] }, repositorio, cronograma, hoje: '2026-11-18' });
   assert.strictEqual((await repositorio.obter(p.id)).bloqueadoEm, '2026-11-10');
 });
+
+test('aviso de OS de retirada: comenta uma vez na ocorrência marcando o responsável', async () => {
+  const { enviarAvisosPendentes } = require('../src/processos/servico');
+  const { criarProcesso, posicionar } = require('../src/cronograma/motor');
+  const cronograma = carregarCronograma();
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '11473', nome: 'X', contrato: '11473' }, bloqueadoEm: '2026-10-01', inicio: '2026-11-17', cronograma });
+  posicionar(p, { etapaId: 'cancelamento', por: 'Jessica', data: '2026-11-17' }, cronograma);
+  p.ocorrencia = { numero: '261106095100' }; // ocorrência criada à mão no SGP
+  await repositorio.salvarProcesso(p);
+  const comentarios = [];
+  const comentar = async (c) => { comentarios.push(c); };
+  assert.strictEqual(await enviarAvisosPendentes({ repositorio, cronograma, hoje: '2026-11-18', comentar, destinatarios: { os: 'miguel_sgp' } }), 1);
+  assert.strictEqual(comentarios[0].numero, '261106095100');
+  assert.match(comentarios[0].texto, /ABRIR A OS DE RETIRADA/);
+  assert.match(comentarios[0].texto, /@miguel_sgp/);
+  // Não repete
+  assert.strictEqual(await enviarAvisosPendentes({ repositorio, cronograma, hoje: '2026-11-19', comentar, destinatarios: { os: 'miguel_sgp' } }), 0);
+});

@@ -122,6 +122,8 @@ function criarApp(opcoes) {
   const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '' } = opcoes;
   // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
   const comentar = (processo, evento) => {
+    // Depois de qualquer ação, confere avisos pendentes (ex.: OS de retirada que acabou de ficar para hoje).
+    if (typeof opcoes.aposAcao === 'function') Promise.resolve().then(opcoes.aposAcao).catch(() => {});
     if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
     const texto = textoComentario(evento, { responsavel: responsavelSgp });
     Promise.resolve(comentarOcorrenciaSgp({ numero: processo.ocorrencia.numero, texto }))

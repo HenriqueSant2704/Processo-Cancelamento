@@ -86,3 +86,6 @@ alter table usuarios add column if not exists sgp_login text;
 
 -- Promessa de pagamento: nas decisões "o cliente pagou?", guarda qual aviso volta se ele não pagar.
 alter table tarefas add column if not exists promessa integer;
+
+-- Aviso na ocorrência já enviado para esta tarefa (ex.: "abrir OS de retirada").
+alter table tarefas add column if not exists avisado_em date;

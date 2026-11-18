@@ -10,7 +10,7 @@ const COLUNAS_PROCESSO = `
 
 const COLUNAS_TAREFA = `
   id, processo_id::text as processo_id, etapa, tipo, descricao, data::text as data, status,
-  concluida_em::text as concluida_em, concluida_por, observacao, resposta, cancelada_em::text as cancelada_em, promessa`;
+  concluida_em::text as concluida_em, concluida_por, observacao, resposta, cancelada_em::text as cancelada_em, promessa, avisado_em::text as avisado_em`;
 
 function linhaParaProcesso(l) {
   return {
@@ -37,6 +37,7 @@ function linhaParaTarefa(l) {
   if (l.resposta) tarefa.resposta = l.resposta;
   if (l.cancelada_em) tarefa.canceladaEm = l.cancelada_em;
   if (l.promessa) tarefa.promessa = l.promessa;
+  if (l.avisado_em) tarefa.avisadoEm = l.avisado_em;
   return tarefa;
 }
 
@@ -146,13 +147,13 @@ class RepositorioPostgres {
 
       for (const [i, t] of processo.tarefas.entries()) {
         await query(
-          `insert into tarefas (id, processo_id, ordem, etapa, tipo, descricao, data, status, concluida_em, concluida_por, observacao, resposta, cancelada_em, promessa)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `insert into tarefas (id, processo_id, ordem, etapa, tipo, descricao, data, status, concluida_em, concluida_por, observacao, resposta, cancelada_em, promessa, avisado_em)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
            on conflict (id) do update set
              status = excluded.status, concluida_em = excluded.concluida_em, concluida_por = excluded.concluida_por,
-             observacao = excluded.observacao, resposta = excluded.resposta, cancelada_em = excluded.cancelada_em`,
+             observacao = excluded.observacao, resposta = excluded.resposta, cancelada_em = excluded.cancelada_em, avisado_em = excluded.avisado_em`,
           [t.id, processo.id, i + 1, t.etapa, t.tipo, t.descricao, t.data, t.status, t.concluidaEm || null, t.concluidaPor || null,
-            t.observacao || null, t.resposta || null, t.canceladaEm || null, t.promessa || null],
+            t.observacao || null, t.resposta || null, t.canceladaEm || null, t.promessa || null, t.avisadoEm || null],
         );
       }
 

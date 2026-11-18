@@ -25,15 +25,14 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   const cronograma = config.carregarCronograma();
   const criarSgp = (hoje) => criarFonteSgp(config, hoje, { bancoReal: armazenamento.tipo === 'postgres' });
   const sincronizador = criarSincronizador({
-    executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia }),
+    executar: async (dia) => {
+      const r = await servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia });
+      await avisosPendentes(dia);
+      return r;
+    },
     hoje: hojeISO,
     horaInicio: config.sgp.horaSincronizacao,
   });
-  // Com o SGP real, sincroniza sozinho uma vez por dia (a partir de SGP_HORA_SINCRONIZACAO, padrão 7h).
-  if (!modoDemo && config.sgp.modo === 'api' && config.sgp.sincronizacaoAutomatica) {
-    sincronizador.iniciarAgenda();
-    console.log(`Sincronização automática com o SGP: todo dia a partir das ${config.sgp.horaSincronizacao}h.`);
-  }
 
   // Botão "Criar no SGP": no modo demonstração usa um SGP de mentira; no real, só com SGP_CRIAR_OCORRENCIA=sim.
   let criarOcorrenciaSgp = null;
@@ -71,7 +70,27 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log('Comentários automáticos nas ocorrências do SGP: LIGADO.');
   }
 
+  // Avisos pendentes na ocorrência (ex.: marcar quem abre a OS de retirada). Só com comentários ligados.
+  async function avisosPendentes(dia) {
+    if (!comentarOcorrenciaSgp) return;
+    try {
+      const n = await servico.enviarAvisosPendentes({
+        repositorio: armazenamento.repositorio, cronograma, hoje: dia, comentar: comentarOcorrenciaSgp, destinatarios: { os: config.sgp.responsavelOs },
+      });
+      if (n) console.log(`Avisos enviados nas ocorrências: ${n}`);
+    } catch (erro) {
+      console.error(`Avisos nas ocorrências falharam: ${erro.message}`);
+    }
+  }
+
+  // Com o SGP real, sincroniza sozinho uma vez por dia (a partir de SGP_HORA_SINCRONIZACAO, padrão 7h).
+  if (!modoDemo && config.sgp.modo === 'api' && config.sgp.sincronizacaoAutomatica) {
+    sincronizador.iniciarAgenda();
+    console.log(`Sincronização automática com o SGP: todo dia a partir das ${config.sgp.horaSincronizacao}h.`);
+  }
+
   const app = criarApp({
+    aposAcao: () => avisosPendentes(hojeISO()),
     criarOcorrenciaSgp,
     comentarOcorrenciaSgp,
     responsavelSgp: config.sgp.responsavelOcorrencia,

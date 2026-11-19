@@ -147,3 +147,17 @@ test('Postgres: guarda e atualiza a ficha do cliente por contrato', async (t) =>
   assert.deepStrictEqual(await repo.obterFicha('C-1'), { plano: 'C', telefones: [], em: '2026-11-19' });
   assert.deepStrictEqual(await repo.obterFicha('C-2'), { plano: 'B', em: '2026-11-18' });
 });
+
+test('Postgres: data remarcada de uma tarefa existente fica gravada (aviso atrasado e feriado)', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  const id = await repo.proximoId();
+  const p = criarProcesso({ id, cliente: { id: '77', nome: 'Cliente', contrato: 'C-77' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  await repo.salvarProcesso(p);
+  const salvo = await repo.obter(id);
+  const primeiro = salvo.tarefas.find((x) => x.tipo === 'contato');
+  concluirTarefa(salvo, primeiro.id, { por: 'Jessica', data: '2026-11-17' }, cronograma); // um dia atrasado
+  await repo.salvarProcesso(salvo);
+  const relido = await repo.obter(id);
+  const datas = relido.tarefas.filter((x) => x.status === 'pendente' && x.tipo === 'contato').map((x) => x.data);
+  assert.deepStrictEqual(datas, ['2026-11-19', '2026-11-23']);
+});

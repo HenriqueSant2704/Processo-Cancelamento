@@ -166,6 +166,7 @@ class RepositorioPostgres {
           `insert into tarefas (id, processo_id, ordem, etapa, tipo, descricao, data, status, concluida_em, concluida_por, observacao, resposta, cancelada_em, promessa, avisado_em)
            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
            on conflict (id) do update set
+             data = excluded.data, descricao = excluded.descricao, ordem = excluded.ordem,
              status = excluded.status, concluida_em = excluded.concluida_em, concluida_por = excluded.concluida_por,
              observacao = excluded.observacao, resposta = excluded.resposta, cancelada_em = excluded.cancelada_em, avisado_em = excluded.avisado_em`,
           [t.id, processo.id, i + 1, t.etapa, t.tipo, t.descricao, t.data, t.status, t.concluidaEm || null, t.concluidaPor || null,

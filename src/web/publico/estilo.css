@@ -672,3 +672,7 @@ button.faixa-item:hover { border-color: var(--cor); }
 .barra .sync-texto { max-width: 150px; }
 
 .lt-pdf { display: grid; place-items: center; width: 56px; height: 40px; border-radius: 6px; border: 1px solid var(--linha-forte); background: var(--perigo-suave); color: var(--perigo); font: 700 11px var(--mono); }
+
+/* Erro dentro da janela aberta (ex.: "coloque a ocorrência como Pendente") */
+.janela-erro { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--perigo); border-radius: 10px; background: var(--perigo-suave); color: var(--perigo); font-size: 13px; font-weight: 600; animation: subir .2s ease; }
+.janela-erro svg { flex-shrink: 0; margin-top: 1px; }

@@ -118,6 +118,16 @@
   }
 
   function avisar(texto, tipo = '') {
+    // Com uma janela aberta, o erro aparece dentro dela (o aviso normal ficaria escondido atrás da janela).
+    const janela = document.querySelector('dialog[open]');
+    const form = janela && janela.querySelector('form');
+    if (tipo === 'erro' && form && form.querySelector('.janela-acoes')) {
+      let caixa = form.querySelector('.janela-erro');
+      if (!caixa) { caixa = el('p', { class: 'janela-erro', role: 'alert' }); form.querySelector('.janela-acoes').before(caixa); }
+      caixa.replaceChildren(ico('alerta'), el('span', {}, texto));
+      caixa.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     const t = el('div', { class: `toast ${tipo}`, role: 'status' }, ico(tipo === 'erro' ? 'alerta' : 'check'), texto);
     $('#avisos').append(t);
     setTimeout(() => t.remove(), 3200);
@@ -1395,6 +1405,8 @@
   $('#form-decisao').addEventListener('submit', enviarDecisao);
   $('#form-decisao').addEventListener('change', efeitoDecisao);
   $('#form-decisao').addEventListener('input', (e) => { if (e.target.name === 'mensagem') decisaoAtual.editado = true; });
+  // Ao fechar uma janela, some o erro que ficou nela.
+  document.querySelectorAll('dialog').forEach((dlg) => dlg.addEventListener('close', () => dlg.querySelectorAll('.janela-erro').forEach((x) => x.remove())));
   $('#form-mensagem').addEventListener('submit', enviarMensagem);
   $('#form-mensagem').anexo.addEventListener('change', (e) => { usarAnexo(e.target.files[0]); e.target.value = ''; });
   $('#anexo-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-mensagem').anexo.click(); } });

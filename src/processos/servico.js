@@ -36,7 +36,7 @@ async function sincronizar({ sgp, repositorio, cronograma, hoje }) {
     novos.push(processo);
   }
 
-  return { totalBloqueados: bloqueados.length, novos };
+  return { totalBloqueados: bloqueados.length, novos, suspensos: new Set(bloqueados.map((c) => String(c.contrato))) };
 }
 
 // Abre um processo do fluxo "pos-cancelamento" para cada contrato com ocorrência
@@ -139,9 +139,33 @@ async function reajustarAgenda({ repositorio, cronograma, hoje }) {
   return ajustadas;
 }
 
+// Tira do processo quem NÃO está mais suspenso no SGP e NÃO tem ocorrência aberta (regra do Miguel, 19/11):
+// ex.: pagou ou fez promessa antes de abrir a ocorrência, ou o contrato foi encerrado. Se for suspenso de novo,
+// a sincronização abre um processo novo. Com ocorrência aberta (ex.: promessa feita no meio da notificação), fica.
+// Só vale para as fases antes do cancelamento (depois dele o contrato fica cancelado mesmo).
+const FASES_COM_SUSPENSAO = ['Notificação', 'Negativação', 'Negativado', 'Aviso de cancelamento'];
+async function retirarQuemSaiu({ repositorio, cronograma, hoje, suspensos, abertas }) {
+  const { obterEtapa } = require('../cronograma/motor');
+  const { registrar } = require('../auditoria/historico');
+  const retirados = [];
+  for (const resumo of await repositorio.listar()) {
+    if (resumo.status !== 'ativo' || (resumo.fluxo || 'principal') !== 'principal' || !resumo.etapaAtual) continue;
+    const contrato = String(resumo.cliente.contrato);
+    if (suspensos.has(contrato) || abertas.has(contrato)) continue;
+    if (!FASES_COM_SUSPENSAO.includes(obterEtapa(cronograma, resumo.etapaAtual).fase)) continue;
+    const processo = await repositorio.obter(resumo.id);
+    for (const t of processo.tarefas) if (t.status === 'pendente') Object.assign(t, { status: 'cancelada', canceladaEm: hoje });
+    Object.assign(processo, { status: 'finalizado', resultado: 'saiu-da-suspensao', etapaAtual: null, finalizadoEm: hoje, autorizacao: null });
+    registrar(processo, { data: hoje, por: 'sistema', evento: 'saiu-da-suspensao', detalhes: 'O contrato não está mais suspenso no SGP e não há ocorrência aberta. Se for suspenso de novo, um processo novo começa.' });
+    await repositorio.salvarProcesso(processo);
+    retirados.push(processo);
+  }
+  return retirados;
+}
+
 // Liga cada processo de suspenso à ocorrência aberta do contrato no SGP (para os comentários automáticos).
-async function vincularOcorrencias({ sgp, repositorio }) {
-  const porContrato = await sgp.listarOcorrenciasDoFluxoPrincipal();
+async function vincularOcorrencias({ sgp, repositorio, porContrato: lido }) {
+  const porContrato = lido || await sgp.listarOcorrenciasDoFluxoPrincipal();
   let ligados = 0;
   for (const p of await repositorio.listar()) {
     if (p.status !== 'ativo' || (p.fluxo || 'principal') !== 'principal') continue;
@@ -234,17 +258,28 @@ async function sincronizarTudo(args) {
       erros.push(`pós-cancelamento: ${erro.message}`);
     }
   }
-  let suspensos = { totalBloqueados: 0, novos: [] };
+  let suspensos = { totalBloqueados: 0, novos: [], suspensos: null };
   try {
     suspensos = await sincronizar(args);
   } catch (erro) {
     erros.push(`suspensos: ${erro.message}`);
   }
+  let abertas = null;
   if (typeof args.sgp.listarOcorrenciasDoFluxoPrincipal === 'function') {
     try {
-      await vincularOcorrencias(args);
+      abertas = await args.sgp.listarOcorrenciasDoFluxoPrincipal();
+      await vincularOcorrencias({ ...args, porContrato: abertas });
     } catch (erro) {
       erros.push(`ocorrências: ${erro.message}`);
+    }
+  }
+  // Só tira alguém quando as DUAS leituras deram certo (nunca por falha do SGP).
+  let retirados = [];
+  if (suspensos.suspensos && suspensos.suspensos.size && abertas) {
+    try {
+      retirados = await retirarQuemSaiu({ ...args, suspensos: suspensos.suspensos, abertas });
+    } catch (erro) {
+      erros.push(`saída de quem não está mais suspenso: ${erro.message}`);
     }
   }
   if (typeof args.sgp.listarFichas === 'function') {
@@ -259,7 +294,7 @@ async function sincronizarTudo(args) {
   } catch (erro) {
     erros.push(`reajuste da agenda: ${erro.message}`);
   }
-  const resultado = { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos] };
+  const resultado = { totalBloqueados: suspensos.totalBloqueados, totalPosCancelamento: pos.totalPosCancelamento, novos: [...suspensos.novos, ...pos.novos], retirados: retirados.length };
   if (erros.length) {
     const erro = new Error(`Sincronização incompleta (${erros.join('; ')}). ${resultado.novos.length} novo(s) processo(s) foram gravados.`);
     erro.resultadoParcial = resultado;
@@ -314,4 +349,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { posicionarPeloSgp, lerAutorizacoes, atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { retirarQuemSaiu, posicionarPeloSgp, lerAutorizacoes, atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

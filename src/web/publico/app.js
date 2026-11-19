@@ -637,7 +637,7 @@
     }
 
     const situacao = fim
-      ? el('span', { class: `selo ${d.resultado === 'regularizado' ? 'sucesso' : 'perigo'}` }, d.resultado === 'regularizado' ? 'Regularizado' : 'Cancelado')
+      ? el('span', { class: `selo ${d.resultado === 'regularizado' ? 'sucesso' : d.resultado === 'saiu-da-suspensao' ? '' : 'perigo'}` }, d.resultado === 'regularizado' ? 'Regularizado' : d.resultado === 'saiu-da-suspensao' ? 'Não está mais suspenso' : 'Cancelado')
       : el('span', { class: 'selo marca' }, d.etapa.nome);
 
     const numeros = el('div', { class: 'numeros quatro' },
@@ -1207,7 +1207,7 @@
 
   // ---------- Vista "Todos os clientes" ----------
   function situacao(c) {
-    if (c.status !== 'ativo') return c.resultado === 'regularizado' ? el('span', { class: 'selo sucesso' }, ico('check'), 'Regularizado') : el('span', { class: 'selo perigo' }, 'Cancelado');
+    if (c.status !== 'ativo') return c.resultado === 'regularizado' ? el('span', { class: 'selo sucesso' }, ico('check'), 'Regularizado') : c.resultado === 'saiu-da-suspensao' ? el('span', { class: 'selo' }, 'Não está mais suspenso') : el('span', { class: 'selo perigo' }, 'Cancelado');
     if (c.paraHoje.some((t) => t.atrasada)) return el('span', { class: 'selo perigo' }, ico('alerta'), 'Atrasado');
     if (c.paraHoje.length) return el('span', { class: 'selo marca' }, 'Tarefa hoje');
     return el('span', { class: 'selo' }, ico('relogio'), 'Aguardando');

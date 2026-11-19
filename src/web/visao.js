@@ -161,7 +161,8 @@ function detalheProcesso(processo, hoje, cronograma) {
     return e && e.ocorrenciaSgp && e.ocorrenciaSgp.acao === t.descricao ? e.ocorrenciaSgp.tipo : null;
   };
   const v0 = visaoProcesso(processo, hoje, cronograma);
-  const v = { ...v0, paraHoje: v0.paraHoje.map((t) => ({ ...t, ocorrenciaTipo: criaOcorrencia(t) })) };
+  const exigeAnexo = (t) => { const e = cronograma.etapas.find((x) => x.id === t.etapa); return Boolean(e && (e.anexoObrigatorio || []).includes(t.descricao)); };
+  const v = { ...v0, paraHoje: v0.paraHoje.map((t) => ({ ...t, ocorrenciaTipo: criaOcorrencia(t), anexoObrigatorio: exigeAnexo(t) })) };
   // Na ficha, mostra só as fases e etapas do fluxo deste processo.
   const fluxo = obterFluxo(cronograma, v.fluxo);
   const doFluxo = (e) => fluxo.fases.includes(e.fase);

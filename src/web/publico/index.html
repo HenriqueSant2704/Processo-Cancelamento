@@ -170,6 +170,14 @@
         <span>Mensagem para a ocorrência</span>
         <textarea name="mensagem" rows="8" maxlength="3000"></textarea>
       </label>
+      <div class="campo print-campo" id="mensagem-anexo" hidden>
+        <span>Arquivo da ação <em class="opcional">(obrigatório: print ou PDF, vai para a ocorrência)</em></span>
+        <label class="print-alvo" id="anexo-alvo" tabindex="0">
+          <input type="file" name="anexo" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
+          <img id="anexo-previa" alt="Prévia do arquivo" hidden>
+          <span id="anexo-dica">Clique para escolher o arquivo ou cole o print com Ctrl+V</span>
+        </label>
+      </div>
       <div class="marcar-area"></div>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="mensagem-cancelar">Cancelar</button>

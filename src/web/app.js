@@ -271,7 +271,7 @@ function criarApp(opcoes) {
       // Imagem de um print guardado (só tipos de imagem conhecidos, nunca HTML).
       if (req.method === 'GET' && (m = url.pathname.match(/^\/api\/anexos\/(\d+)$/))) {
         const anexo = typeof repositorio.obterAnexo === 'function' ? await repositorio.obterAnexo(m[1]) : null;
-        if (!anexo || !/^image\/(png|jpeg|webp)$/.test(anexo.tipo)) throw new ErroHttp(404, 'Print não encontrado.');
+        if (!anexo || !/^(image\/(png|jpeg|webp)|application\/pdf)$/.test(anexo.tipo)) throw new ErroHttp(404, 'Arquivo não encontrado.');
         res.writeHead(200, { ...SEGURANCA, 'Content-Type': anexo.tipo, 'Content-Length': anexo.dados.length, 'Cache-Control': 'private, max-age=86400', 'Content-Disposition': `inline; filename="${anexo.nome.replace(/"/g, '')}"` });
         return res.end(anexo.dados);
       }
@@ -467,6 +467,13 @@ function criarApp(opcoes) {
           const t = p && p.tarefas.find((x) => x.id === m[1]);
           if (t && t.tipo === 'contato' && t.status === 'pendente') throw new ErroHttp(400, 'Anexe o print do aviso para marcar como feito.');
         }
+        if (!print) {
+          // Ações que exigem arquivo (ex.: negativar, retirar a negativação): sem anexo não fica feita.
+          const p = await repositorio.obterPorTarefa(m[1]);
+          const t = p && p.tarefas.find((x) => x.id === m[1]);
+          const e = t && cronograma.etapas.find((x) => x.id === t.etapa);
+          if (t && t.status === 'pendente' && e && (e.anexoObrigatorio || []).includes(t.descricao)) throw new ErroHttp(400, `Anexe o arquivo (print ou PDF) de "${t.descricao}" para marcar como feito.`);
+        }
         // Registro de tentativas de contato (ligação, mensagem, e-mail...): fica na tarefa e vai para a
         // ocorrência só como registro, sem marcar ninguém.
         const registro = corpo.registro === true;
@@ -504,7 +511,7 @@ function criarApp(opcoes) {
           }
           if (print && typeof repositorio.salvarAnexo === 'function') {
             const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...print, em: hoje, por: tarefa.concluidaPor });
-            enviarPrint(processo, anexoId, print, `Print: ${tarefa.descricao}`);
+            enviarPrint(processo, anexoId, print, `${print.tipo === 'application/pdf' ? 'Arquivo' : 'Print'}: ${tarefa.descricao}`);
           }
           return responderJson(res, 200, await detalhe(processo, hoje));
         } catch (erro) {

@@ -96,3 +96,31 @@ test('anexo pela tela do SGP: multipart com os campos configurados e aviso de tr
   pedeSenha = true;
   await assert.rejects(sessao.anexar({ ocorrenciaId: 1, nome: 'p.png', tipo: 'image/png', dados: PNG }), /trocar a senha/);
 });
+
+test('negativar e retirar a negativação: só ficam feitos com arquivo (print ou PDF)', async (t) => {
+  const { posicionar } = require('../src/cronograma/motor');
+  const cronograma = carregarCronograma();
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-03', inicio: '2026-11-04', cronograma });
+  posicionar(p, { etapaId: 'negativacao', por: 'Jessica', data: '2026-11-16' }, cronograma);
+  p.ocorrencia = { numero: '999' };
+  await repositorio.salvarProcesso(p);
+  const anexados = [];
+  const chamar = subir(t, { repositorio, anexarOcorrenciaSgp: async (a) => { anexados.push(a); } });
+  const d = '?data=2026-11-16';
+  let ficha = (await chamar(`/api/processos/1${d}`)).json;
+  const negativar = ficha.paraHoje.find((x) => x.descricao === 'Negativar o cliente');
+  assert.strictEqual(negativar.anexoObrigatorio, true);
+  assert.strictEqual(ficha.paraHoje.find((x) => x.descricao !== 'Negativar o cliente').anexoObrigatorio, false);
+  let r = await chamar(`/api/tarefas/${negativar.id}/concluir${d}`, { por: 'Jessica' });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.json.erro, /Anexe o arquivo/);
+  const pdf = { nome: 'serasa.pdf', tipo: 'application/pdf', base64: Buffer.from('%PDF-1.4\n%fim').toString('base64') };
+  r = await chamar(`/api/tarefas/${negativar.id}/concluir${d}`, { por: 'Jessica', print: pdf });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.anexos[0].tipo, 'application/pdf');
+  const arq = await chamar(`/api/anexos/${r.json.anexos[0].id}`);
+  assert.strictEqual(arq.tipo, 'application/pdf');
+  await new Promise((r2) => setTimeout(r2, 20));
+  assert.strictEqual(anexados[0].nome, 'serasa.pdf');
+});

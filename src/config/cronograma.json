@@ -6,7 +6,8 @@
     "Tipos de etapa: contatos (tentativas e depois a decisão), acao (tarefas; ao concluir todas vai para a proxima), aguardo (espera dias corridos e depois pergunta a decisão) e final (tarefas de encerramento).",
     "Fluxos: \"principal\" começa pela suspensão no SGP; \"pos-cancelamento\" começa pelas ocorrências abertas do tipo \"Financeiro - Negativação pós Cancelamento\".",
     "ocorrenciaSgp: a ação indicada ganha o botão \"Criar no SGP\", que abre uma ocorrência do tipo informado (nome igual ao do SGP).",
-    "avisarSgp: quando a ação fica pendente, o sistema comenta UMA vez na ocorrência do contrato marcando a pessoa (\"para\": os = SGP_RESPONSAVEL_OS)."
+    "avisarSgp: quando a ação fica pendente, o sistema comenta UMA vez na ocorrência do contrato marcando a pessoa (\"para\": os = SGP_RESPONSAVEL_OS).",
+    "anexoObrigatorio: ações que só podem ser marcadas como feitas com um arquivo anexado (print ou PDF), que vai para a ocorrência no SGP."
   ],
   "feriados": [],
   "retorno": {
@@ -70,7 +71,10 @@
         "Negativar o cliente",
         "Enviar notificação informando a negativação"
       ],
-      "proxima": "aguardo-negativado"
+      "proxima": "aguardo-negativado",
+      "anexoObrigatorio": [
+        "Negativar o cliente"
+      ]
     },
     {
       "id": "aguardo-negativado",
@@ -94,7 +98,10 @@
         "Desbloquear o cliente no SGP",
         "Encerrar a ocorrência"
       ],
-      "resultado": "regularizado"
+      "resultado": "regularizado",
+      "anexoObrigatorio": [
+        "Retirar a negativação"
+      ]
     },
     {
       "id": "aviso-cancelamento",
@@ -219,7 +226,10 @@
         "Retirar a negativação (ocorrência \"Financeiro - Anular Negativação\")",
         "Encerrar a ocorrência no SGP"
       ],
-      "resultado": "regularizado"
+      "resultado": "regularizado",
+      "anexoObrigatorio": [
+        "Retirar a negativação (ocorrência \"Financeiro - Anular Negativação\")"
+      ]
     }
   ],
   "fluxos": [

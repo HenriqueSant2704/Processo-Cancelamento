@@ -5,20 +5,21 @@ const TIPOS = {
   'image/png': (b) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
   'image/jpeg': (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
   'image/webp': (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP',
+  'application/pdf': (b) => b.length > 5 && b.toString('ascii', 0, 5) === '%PDF-',
 };
-const EXTENSAO = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+const EXTENSAO = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 const TAMANHO_MAXIMO = 4 * 1024 * 1024; // 4 MB
 
 // print: { nome, tipo, base64 } (base64 pode vir como data URL). Devolve { nome, tipo, dados: Buffer }.
 function lerPrint(print) {
   if (!print || typeof print !== 'object') throw new Error('Anexe o print do aviso.');
   const tipo = String(print.tipo || '').toLowerCase();
-  if (!TIPOS[tipo]) throw new Error('O print precisa ser uma imagem PNG, JPG ou WEBP.');
+  if (!TIPOS[tipo]) throw new Error('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.');
   const base64 = String(print.base64 || '').replace(/^data:[^;]+;base64,/, '');
   if (!base64 || !/^[A-Za-z0-9+/=\s]+$/.test(base64)) throw new Error('Não consegui ler a imagem do print.');
   const dados = Buffer.from(base64, 'base64');
-  if (dados.length > TAMANHO_MAXIMO) throw new Error('O print passou de 4 MB. Recorte só a parte da conversa e tente de novo.');
-  if (!TIPOS[tipo](dados)) throw new Error('O arquivo enviado não é uma imagem válida.');
+  if (dados.length > TAMANHO_MAXIMO) throw new Error('O arquivo passou de 4 MB. Recorte o print ou diminua o PDF e tente de novo.');
+  if (!TIPOS[tipo](dados)) throw new Error('O arquivo enviado não é uma imagem ou PDF válido.');
   const limpo = String(print.nome || '').replace(/[^\w.\- ]+/g, '').trim().slice(0, 80);
   const nome = limpo && /\.\w{3,4}$/.test(limpo) ? limpo : `print.${EXTENSAO[tipo]}`;
   return { nome, tipo, dados };

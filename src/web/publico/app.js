@@ -449,7 +449,7 @@
       ? el('small', { class: 'atrasada' }, `Atrasada desde ${dataCurta(t.data)} (${plural(diasEntre(t.data, hoje()), 'dia', 'dias')})`)
       : enviado
         ? el('small', { class: perguntar ? 'perguntar' : '' }, `Enviado às ${horaDe(t.retorno.enviadoEm)}${t.retorno.enviadoPor ? ` por ${t.retorno.enviadoPor}` : ''} · `, perguntar ? el('b', {}, 'hora de perguntar: teve retorno?') : `nova pergunta às ${horaDe(t.retorno.proximaChecagem)}`)
-        : el('small', {}, { contato: 'Envie o aviso e marque "Enviei"', acao: 'Ação no SGP', decisao: 'Responda para o processo seguir' }[t.tipo]);
+        : el('small', {}, t.anexoObrigatorio ? 'Ação no SGP · precisa anexar o arquivo (print ou PDF)' : { contato: 'Envie o aviso e marque "Enviei"', acao: 'Ação no SGP', decisao: 'Responda para o processo seguir' }[t.tipo]);
     let acoes;
     if (t.tipo === 'decisao') {
       acoes = el('div', { class: 'acoes-tarefa' },
@@ -590,7 +590,7 @@
 
   function desenharFicha(d) {
     const fim = d.status !== 'ativo';
-    const simples = d.paraHoje.filter((t) => t.tipo === 'acao');
+    const simples = d.paraHoje.filter((t) => t.tipo === 'acao' && !t.anexoObrigatorio);
     const proxima = d.proxima;
 
     const etapas = el('div', { class: 'etapas', style: `--n:${d.fases.length}` }, d.fases.map((nome, k) => {
@@ -615,7 +615,8 @@
             ? el('details', { class: 'lt-detalhe' }, el('summary', {}, 'Ver detalhes de como foi feito'), el('div', { class: 'lt-nota registro' }, t.observacao))
             : t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null,
           ...(d.anexos || []).filter((a) => a.tarefaId === t.id).map((a) => el('a', { class: 'lt-print', href: `/api/anexos/${a.id}`, target: '_blank', rel: 'noopener', title: a.enviadoSgpEm ? 'Print (anexado na ocorrência)' : 'Print do aviso' },
-            el('img', { src: `/api/anexos/${a.id}`, alt: 'Print do aviso', loading: 'lazy' }), el('span', {}, a.enviadoSgpEm ? 'Print · na ocorrência' : 'Print'))),
+            a.tipo === 'application/pdf' ? el('span', { class: 'lt-pdf' }, 'PDF') : el('img', { src: `/api/anexos/${a.id}`, alt: 'Print do aviso', loading: 'lazy' }),
+            el('span', {}, `${a.tipo === 'application/pdf' ? 'Arquivo' : 'Print'}${a.enviadoSgpEm ? ' · na ocorrência' : ''}`))),
           // Pergunta agendada para o futuro: dá para responder antes (ex.: equipamentos já devolvidos).
           t.status === 'pendente' && t.tipo === 'decisao' && t.data > hoje() && !fim
             ? el('div', { class: 'lt-acoes' }, el('span', {}, 'Já aconteceu? Responder agora:'),
@@ -782,12 +783,31 @@
   const marcadosEm = (form) => [...form.querySelectorAll('input[name=marcar]:checked')].map((i) => i.value);
 
   // ---------- Mensagem pronta (ação feita, pedido ao Lucas) ----------
-  let mensagemAtual = null; // { aoEnviar(mensagem, marcar) }
-  function abrirMensagem({ d, titulo: tituloJanela, texto, botao = 'Salvar', aoEnviar }) {
+  let mensagemAtual = null; // { aoEnviar(mensagem, marcar, arquivo), anexo, arquivo }
+  // Arquivo da ação (print ou PDF), escolhido ou colado. Fica em mensagemAtual.arquivo.
+  function usarAnexo(arquivo) {
+    if (!arquivo || !mensagemAtual) return;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(arquivo.type)) { avisar('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.', 'erro'); return; }
+    if (arquivo.size > 4 * 1024 * 1024) { avisar('O arquivo passou de 4 MB.', 'erro'); return; }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      mensagemAtual.arquivo = { nome: arquivo.name || (arquivo.type === 'application/pdf' ? 'arquivo.pdf' : 'print.png'), tipo: arquivo.type, base64: String(leitor.result) };
+      const pdf = arquivo.type === 'application/pdf';
+      $('#anexo-previa').hidden = pdf;
+      if (!pdf) $('#anexo-previa').src = mensagemAtual.arquivo.base64;
+      $('#anexo-dica').textContent = pdf ? `PDF: ${mensagemAtual.arquivo.nome} (clique para trocar)` : 'Clique ou cole outro para trocar';
+    };
+    leitor.readAsDataURL(arquivo);
+  }
+  function abrirMensagem({ d, titulo: tituloJanela, texto, botao = 'Salvar', aoEnviar, anexo = false }) {
     if (!garantirUsuario()) return;
     const f = $('#form-mensagem');
     f.reset();
-    mensagemAtual = { aoEnviar };
+    mensagemAtual = { aoEnviar, anexo, arquivo: null };
+    $('#mensagem-anexo').hidden = !anexo;
+    $('#anexo-previa').hidden = true;
+    $('#anexo-previa').removeAttribute('src');
+    $('#anexo-dica').textContent = 'Clique para escolher o arquivo ou cole o print com Ctrl+V';
     $('#mensagem-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#mensagem-titulo').textContent = tituloJanela;
     $('#mensagem-confirmar').textContent = botao;
@@ -799,10 +819,11 @@
   async function enviarMensagem(e) {
     e.preventDefault();
     const f = e.currentTarget;
+    if (mensagemAtual.anexo && !mensagemAtual.arquivo) { avisar('Anexe o arquivo (print ou PDF) antes de marcar como feito.', 'erro'); $('#anexo-alvo').focus(); return; }
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await mensagemAtual.aoEnviar(f.mensagem.value, marcadosEm(f));
+      await mensagemAtual.aoEnviar(f.mensagem.value, marcadosEm(f), mensagemAtual.arquivo);
       $('#janela-mensagem').close();
     } catch (erro) {
       avisar(erro.message, 'erro');
@@ -818,9 +839,10 @@
       titulo: tarefas.length > 1 ? `Marcar as ${tarefas.length} ações como feitas` : ultima.descricao,
       texto: (d.modelos || {})[ultima.id] || '',
       botao: 'Marcar como feito',
-      aoEnviar: async (mensagem, marcar) => {
+      anexo: Boolean(ultima.anexoObrigatorio),
+      aoEnviar: async (mensagem, marcar, arquivo) => {
         for (const t of tarefas) {
-          const extra = t === ultima ? { mensagem, marcar } : {};
+          const extra = t === ultima ? { mensagem, marcar, print: arquivo || undefined } : {};
           await api(`/api/tarefas/${t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, ...extra }) });
         }
         avisar(tarefas.length > 1 ? `${tarefas.length} tarefas concluídas` : 'Tarefa concluída');
@@ -1374,6 +1396,13 @@
   $('#form-decisao').addEventListener('change', efeitoDecisao);
   $('#form-decisao').addEventListener('input', (e) => { if (e.target.name === 'mensagem') decisaoAtual.editado = true; });
   $('#form-mensagem').addEventListener('submit', enviarMensagem);
+  $('#form-mensagem').anexo.addEventListener('change', (e) => { usarAnexo(e.target.files[0]); e.target.value = ''; });
+  $('#anexo-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-mensagem').anexo.click(); } });
+  $('#janela-mensagem').addEventListener('paste', (e) => {
+    if (!mensagemAtual || !mensagemAtual.anexo) return;
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file');
+    if (item) { e.preventDefault(); usarAnexo(item.getAsFile()); }
+  });
   $('#mensagem-cancelar').addEventListener('click', () => $('#janela-mensagem').close());
   $('#form-promessa').addEventListener('input', (e) => {
     const f = e.currentTarget;

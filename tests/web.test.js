@@ -258,7 +258,8 @@ test('mensagens prontas: cada passo vem com o texto padrão e quem pode ser marc
   const acoes = ficha.paraHoje.filter((x) => x.tipo === 'acao');
   assert.strictEqual(acoes.length, 2);
   assert.strictEqual(ficha.modelos[acoes[0].id], 'Negativar o cliente: feito.');
-  await chamar(`/api/tarefas/${acoes[0].id}/concluir${d}`, { por: 'Jessica' });
+  const png = { nome: 'p.png', tipo: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' };
+  assert.strictEqual((await chamar(`/api/tarefas/${acoes[0].id}/concluir${d}`, { por: 'Jessica', print: png })).status, 200); // negativar exige arquivo
   ficha = (await chamar(`/api/processos/1${d}`)).json;
   assert.match(ficha.modelos[acoes[1].id], /a negativação foi devidamente realizada/);
   comentarios.length = 0;

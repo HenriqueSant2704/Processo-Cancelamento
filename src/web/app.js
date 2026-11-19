@@ -12,6 +12,7 @@ const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo } = require('.
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 const { lerPrint } = require('../processos/prints');
+const { marcarEnviado, registrarChecagem } = require('../processos/retorno');
 
 const PUBLICO = path.join(__dirname, 'publico');
 const TIPOS = {
@@ -211,6 +212,7 @@ function criarApp(opcoes) {
     throw new ErroHttp(409, `Para encerrar essa etapa, coloque a ocorrência ${processo.ocorrencia.numero} como Pendente no SGP. Verifiquei agora e ${agora}.`);
   };
   const hoje = () => hojeISO();
+  const agora = opcoes.agora || (() => new Date().toISOString()); // hora do registro (testes podem fixar)
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
     executar: (dia) => servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio, cronograma, hoje: dia }),
@@ -419,6 +421,32 @@ function criarApp(opcoes) {
       }
       if (req.method === 'GET' && url.pathname === '/api/sincronizacao') {
         return responderJson(res, 200, sincronizador.status());
+      }
+      // Aviso em dois passos: "Enviei" e, depois, "Teve retorno?" a cada X horas.
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/(enviado|retorno)$/))) {
+        const corpo = await lerCorpo(req);
+        const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
+        const processo = await repositorio.obterPorTarefa(m[1]);
+        if (!processo) throw new ErroHttp(404, `Tarefa ${m[1]} não encontrada.`);
+        const momento = agora();
+        try {
+          if (m[2] === 'enviado') {
+            marcarEnviado(processo, m[1], { por, agora: momento, data: hoje }, cronograma);
+          } else {
+            const tarefa = registrarChecagem(processo, m[1], { por, agora: momento, data: hoje, resultado: corpo.resultado, texto: corpo.texto }, cronograma);
+            await repositorio.salvarProcesso(processo);
+            if (corpo.resultado === 'retorno') {
+              comentar(processo, { tipo: 'registro', titulo: `Retorno do cliente: ${tarefa.descricao}`, texto: tarefa.retorno.checagens.at(-1).texto, por, data: hoje, marcar: [] });
+            }
+            return responderJson(res, 200, await detalhe(processo, hoje));
+          }
+          await repositorio.salvarProcesso(processo);
+          return responderJson(res, 200, await detalhe(processo, hoje));
+        } catch (erro) {
+          if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
+          if (erro.status) throw erro;
+          throw new ErroHttp(400, erro.message);
+        }
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
         const corpo = await lerCorpo(req, 6_000_000); // cabe o print do aviso (até 4 MB em base64)

@@ -9,6 +9,10 @@
     "avisarSgp: quando a ação fica pendente, o sistema comenta UMA vez na ocorrência do contrato marcando a pessoa (\"para\": os = SGP_RESPONSAVEL_OS)."
   ],
   "feriados": [],
+  "retorno": {
+    "descricao": "Depois de enviar um aviso, o sistema pergunta a cada X horas se o cliente respondeu.",
+    "horasEntrePerguntas": 2
+  },
   "entrada": {
     "descricao": "Entra no processo todo cliente bloqueado (suspenso) há pelo menos 1 dia no SGP.",
     "diasBloqueadoMinimo": 1

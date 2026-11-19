@@ -115,3 +115,6 @@ create table if not exists anexos (
   enviado_sgp_em date
 );
 create index if not exists anexos_processo on anexos (processo_id);
+
+-- Aviso enviado e esperando o retorno do cliente: { enviadoEm, enviadoPor, proximaChecagem, checagens: [{ em, por, resultado, texto }] }.
+alter table tarefas add column if not exists retorno jsonb;

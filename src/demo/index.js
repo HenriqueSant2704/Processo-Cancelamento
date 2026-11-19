@@ -98,6 +98,13 @@ function semear(arquivo, hoje) {
   repositorio.dados.ultimoId = Number(id);
   repositorio.dados.processos.push(regularizado);
 
+  // Dois clientes esperando o Lucas: um aguardando a resposta e outro com resposta nova (sino).
+  const depoisDeNao = repositorio.dados.processos.filter((p) => p.status === 'ativo' && (p.fluxo || 'principal') === 'principal' && p.etapaAtual !== 'notificacao-negativacao');
+  const ordem = cronograma.etapas.map((e) => e.id);
+  const anteriorDe = Object.fromEntries(ordem.map((id, i) => [id, ordem[Math.max(0, i - 1)]]));
+  if (depoisDeNao[0]) depoisDeNao[0].autorizacao = { status: 'aguardando', etapa: depoisDeNao[0].etapaAtual, etapaAnterior: anteriorDe[depoisDeNao[0].etapaAtual], pedidoEm: hoje, visto: true };
+  if (depoisDeNao[1]) depoisDeNao[1].autorizacao = { status: 'negado', etapa: depoisDeNao[1].etapaAtual, etapaAnterior: anteriorDe[depoisDeNao[1].etapaAtual], pedidoEm: adicionarDias(hoje, -1), decididoEm: hoje, visto: false, resposta: { texto: 'Segura esse até sexta, o cliente me ligou dizendo que vai pagar.', por: 'admin', em: hoje } };
+
   // Dados fictícios do cliente (CPF, telefone, plano, faturas) para a ficha.
   const fichas = fichasExemplo(repositorio.dados.processos.map((p) => p.cliente.contrato), hoje);
   repositorio.dados.fichas = Object.fromEntries([...fichas].map(([c, f]) => [c, { ...f, em: hoje }]));

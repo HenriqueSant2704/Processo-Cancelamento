@@ -2,6 +2,7 @@
 // decisões pendentes, próximos dias e o resumo de cada cliente.
 const { diasEntre, adicionarDiasUteis } = require('../utils/datas');
 const { obterEtapa, obterFluxo } = require('../cronograma/motor');
+const { bloqueada, NOMES: NOMES_AUTORIZACAO } = require('../processos/autorizacao');
 
 const porData = (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id, undefined, { numeric: true });
 
@@ -42,7 +43,10 @@ function passoAtual(processo, etapa, hoje) {
 
 function visaoProcesso(processo, hoje, cronograma) {
   const etapa = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
-  const pendentes = processo.tarefas.filter((t) => t.status === 'pendente').sort(porData);
+  // Esperando o supervisor: nada da próxima etapa aparece para fazer.
+  const parado = processo.status === 'ativo' && bloqueada(processo);
+  const pendentes = parado ? [] : processo.tarefas.filter((t) => t.status === 'pendente').sort(porData);
+  const aut = processo.autorizacao || null;
   const contatos = processo.tarefas.filter((t) => t.etapa === processo.etapaAtual && t.tipo === 'contato');
 
   return {
@@ -59,7 +63,9 @@ function visaoProcesso(processo, hoje, cronograma) {
     financeiro: processo.financeiro || null,
     etapa: etapa ? { id: etapa.id, nome: etapa.nome, fase: etapa.fase, tipo: etapa.tipo } : null,
     faseIndice: etapa ? cronograma.fases.indexOf(etapa.fase) : -1,
-    passo: passoAtual(processo, etapa, hoje),
+    passo: parado ? { id: `aut-${aut.status}`, nome: NOMES_AUTORIZACAO[aut.status] } : passoAtual(processo, etapa, hoje),
+    autorizacao: aut ? { ...aut, etapaNome: aut.etapa ? (cronograma.etapas.find((e) => e.id === aut.etapa) || {}).nome || aut.etapa : null, etapaAnteriorNome: aut.etapaAnterior ? (cronograma.etapas.find((e) => e.id === aut.etapaAnterior) || {}).nome || aut.etapaAnterior : null } : null,
+    parado,
     contatos: {
       feitos: contatos.filter((t) => t.status === 'concluida').length,
       total: contatos.filter((t) => t.status !== 'cancelada').length,
@@ -86,7 +92,7 @@ function painel(processos, hoje, cronograma) {
   let dia = hoje;
   for (let i = 0; i < 10; i++) {
     dia = adicionarDiasUteis(dia, 1, feriados);
-    const doDia = ativos.flatMap((p) => p.tarefas.filter((t) => t.status === 'pendente' && t.data === dia));
+    const doDia = ativos.filter((p) => !bloqueada(p)).flatMap((p) => p.tarefas.filter((t) => t.status === 'pendente' && t.data === dia));
     proximosDias.push({
       data: dia,
       total: doDia.length,
@@ -108,15 +114,21 @@ function painel(processos, hoje, cronograma) {
       clientesHoje: visoes.filter((v) => v.paraHoje.length).length,
       ativos: ativos.length,
       regularizados: processos.filter((p) => p.resultado === 'regularizado').length,
-      aguardandoAutorizacao: ativos.filter((p) => p.autorizacao && p.autorizacao.status === 'aguardando').length,
-      autorizados: ativos.filter((p) => p.autorizacao && p.autorizacao.status === 'autorizado').length,
+      aguardandoAutorizacao: ativos.filter((p) => bloqueada(p)).length,
+      // Autorizados que ainda não começaram a etapa liberada.
+      autorizados: ativos.filter((p) => p.autorizacao && p.autorizacao.status === 'autorizado' && !p.tarefas.some((t) => t.etapa === p.autorizacao.etapa && t.status === 'concluida')).length,
       valorAberto: Math.round(ativos.reduce((s, p) => s + ((p.financeiro && p.financeiro.valorAberto) || 0), 0) * 100) / 100,
       cancelados: processos.filter((p) => p.resultado === 'cancelado').length,
     },
     clientes: visoes
-      .filter((v) => v.paraHoje.length)
+      .filter((v) => v.paraHoje.length || v.parado)
       .sort((a, b) => prioridade(a) - prioridade(b) || a.cliente.nome.localeCompare(b.cliente.nome)),
     proximosDias,
+    // Sino da Jéssica: respostas do supervisor que ela ainda não viu.
+    notificacoes: ativos
+      .filter((p) => p.autorizacao && p.autorizacao.visto === false)
+      .map((p) => ({ id: p.id, cliente: p.cliente.nome, contrato: p.cliente.contrato, status: p.autorizacao.status, nome: NOMES_AUTORIZACAO[p.autorizacao.status], resposta: p.autorizacao.resposta || null, em: p.autorizacao.decididoEm || null }))
+      .sort((a, b) => String(b.em).localeCompare(String(a.em))),
   };
 }
 
@@ -124,7 +136,7 @@ function painel(processos, hoje, cronograma) {
 // Usa o mesmo formato da fila ("paraHoje" = tarefas daquele dia).
 function agendaDoDia(processos, dia, hoje, cronograma) {
   return processos
-    .filter((p) => p.status === 'ativo')
+    .filter((p) => p.status === 'ativo' && !bloqueada(p))
     .map((p) => {
       const v = visaoProcesso(p, hoje, cronograma);
       const doDia = p.tarefas.filter((t) => t.status === 'pendente' && t.data === dia).map((t) => ({ ...t, atrasada: false }));

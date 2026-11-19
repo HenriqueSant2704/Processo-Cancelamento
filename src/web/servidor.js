@@ -107,7 +107,30 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log(`Sincronização automática com o SGP: todo dia a partir das ${config.sgp.horaSincronizacao}h.`);
   }
 
+  // Autorização do supervisor: só faz sentido com comentários ligados (é por eles que o Lucas é perguntado).
+  const exigirAutorizacao = Boolean(comentarOcorrenciaSgp && config.sgp.supervisor && config.sgp.exigirAutorizacao);
+  let aoAutorizar = null; // definido pela tela (comenta o início da etapa liberada)
+  async function lerAutorizacoes() {
+    try {
+      const mudaram = await servico.lerAutorizacoes({
+        sgp: criarSgp(hojeISO()), repositorio: armazenamento.repositorio, cronograma, hoje: hojeISO(),
+        supervisor: config.sgp.supervisor, usuarioSistema: config.sgp.usuarioIntegracao,
+      });
+      if (mudaram.length) console.log(`Respostas de autorização lidas no SGP: ${mudaram.length}`);
+      if (aoAutorizar) for (const p of mudaram) aoAutorizar(p);
+    } catch (erro) {
+      console.error(`Leitura das autorizações falhou: ${erro.message}`);
+    }
+  }
+  if (exigirAutorizacao) {
+    setInterval(lerAutorizacoes, 10 * 60 * 1000).unref();
+    console.log('Autorização do supervisor entre etapas: LIGADA (lê a resposta na ocorrência a cada 10 minutos).');
+  }
+
   const app = criarApp({
+    exigirAutorizacao,
+    lerAutorizacoes: exigirAutorizacao ? lerAutorizacoes : null,
+    registrarAoAutorizar: (fn) => { aoAutorizar = fn; },
     aposAcao: () => avisosPendentes(hojeISO()),
     criarOcorrenciaSgp,
     comentarOcorrenciaSgp,

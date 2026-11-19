@@ -97,3 +97,6 @@ create table if not exists fichas_clientes (
   dados         jsonb not null,
   atualizado_em date not null
 );
+
+-- Autorização do supervisor entre etapas (aguardando / autorizado / negado / respondido, texto da resposta, visto).
+alter table processos add column if not exists autorizacao jsonb;

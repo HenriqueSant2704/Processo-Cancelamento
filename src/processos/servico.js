@@ -154,6 +154,26 @@ async function vincularOcorrencias({ sgp, repositorio }) {
   return ligados;
 }
 
+// Lê, nas ocorrências, a resposta do supervisor para os clientes que aguardam autorização.
+// Devolve os processos que mudaram (para avisar a Jéssica e comentar o início da etapa).
+async function lerAutorizacoes({ sgp, repositorio, cronograma, hoje, supervisor, usuarioSistema }) {
+  const { acharResposta, classificarResposta, aplicarResposta } = require('./autorizacao');
+  if (!supervisor || typeof sgp.comentariosDaOcorrencia !== 'function') return [];
+  const mudaram = [];
+  for (const resumo of await repositorio.listar()) {
+    if (resumo.status !== 'ativo' || !resumo.autorizacao || resumo.autorizacao.status !== 'aguardando') continue;
+    if (!resumo.ocorrencia || !resumo.ocorrencia.numero) continue;
+    const resposta = acharResposta(await sgp.comentariosDaOcorrencia(resumo.ocorrencia.numero), { supervisor, usuarioSistema, pedidoEm: resumo.autorizacao.pedidoEm });
+    if (!resposta) continue;
+    const processo = await repositorio.obter(resumo.id);
+    if (!processo.autorizacao || processo.autorizacao.status !== 'aguardando') continue;
+    aplicarResposta(processo, { status: classificarResposta(resposta.texto), texto: resposta.texto, por: resposta.por, em: resposta.em, origem: 'sgp' }, cronograma, hoje);
+    await repositorio.salvarProcesso(processo);
+    mudaram.push(processo);
+  }
+  return mudaram;
+}
+
 // Dados do cliente (CPF, contatos, plano, faturas) para os contratos com processo ativo.
 async function atualizarFichas({ sgp, repositorio, hoje }) {
   const contratos = [...new Set((await repositorio.listar()).filter((p) => p.status === 'ativo').map((p) => String(p.cliente.contrato)))];
@@ -262,4 +282,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { lerAutorizacoes, atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

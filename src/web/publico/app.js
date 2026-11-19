@@ -118,7 +118,37 @@
     estado.painel = await api('/api/painel');
     desenharTopo();
     desenharHoje();
+    desenharSino();
   }
+
+  // ---------- Sino: respostas do Lucas ----------
+  function desenharSino() {
+    const lista = estado.painel.notificacoes || [];
+    $('#sino-total').hidden = !lista.length;
+    $('#sino-total').textContent = String(lista.length);
+    $('#sino').classList.toggle('tem', lista.length > 0);
+    $('#sino-lista').replaceChildren(
+      el('div', { class: 'sino-titulo' }, 'Respostas do Lucas'),
+      lista.length
+        ? lista.map((n) => el('button', { class: `sino-item aut-${n.status}`, onclick: () => abrirNotificacao(n) },
+            el('span', { class: `selo-mini aut-${n.status}` }, n.nome),
+            el('strong', {}, titulo(n.cliente)),
+            n.resposta && n.resposta.texto ? el('span', { class: 'sino-texto' }, `"${n.resposta.texto.slice(0, 140)}${n.resposta.texto.length > 140 ? '…' : ''}"`) : null))
+        : el('p', { class: 'suave sino-vazio' }, 'Nenhuma resposta nova.'));
+  }
+  function alternarSino(abrir) {
+    const aberto = abrir ?? $('#sino-lista').hidden;
+    $('#sino-lista').hidden = !aberto;
+    $('#sino').setAttribute('aria-expanded', String(aberto));
+  }
+  async function abrirNotificacao(n) {
+    alternarSino(false);
+    if (estado.vista !== 'hoje') trocarVista('hoje');
+    estado.aba = 'todos';
+    desenharHoje();
+    await selecionar(n.id, true);
+  }
+  setInterval(() => { if (!document.hidden && estado.painel) carregarPainel().catch(() => {}); }, 120000);
   async function carregarClientes() {
     const r = await api('/api/processos');
     estado.processos = r.processos;
@@ -167,10 +197,16 @@
   // A fila é organizada por PASSO (ex.: "Notificação de negativação · 1ª mensagem"), para a Jéssica
   // poder trabalhar um grupo de cada vez. "Atrasados" é um filtro à parte.
   const ORDEM_PASSO = { 'msg-1': 1, 'msg-2': 2, 'msg-3': 3, promessa: 4, decisao: 5, espera: 6, acoes: 0 };
-  const chaveGrupo = (c) => (c.etapa ? `${c.etapa.id}:${c.passo ? c.passo.id : 'x'}` : 'outros');
-  const nomeGrupo = (c) => (c.etapa ? `${c.etapa.nome}${c.passo ? ` · ${c.passo.nome}` : ''}` : 'Outros');
-  const ordemGrupo = (c) => [c.faseIndice ?? 99, c.passo ? ORDEM_PASSO[c.passo.id] ?? 9 : 9];
-  const passaAba = (c) => estado.aba === 'todos' || (estado.aba === 'atrasadas' ? c.paraHoje.some((t) => t.atrasada) : chaveGrupo(c) === estado.aba);
+  // Quem espera o Lucas fica num grupo só (por situação), no topo da fila.
+  const chaveGrupo = (c) => (c.parado ? `aut:${c.passo.id}` : c.etapa ? `${c.etapa.id}:${c.passo ? c.passo.id : 'x'}` : 'outros');
+  const nomeGrupo = (c) => (c.parado ? c.passo.nome : c.etapa ? `${c.etapa.nome}${c.passo ? ` · ${c.passo.nome}` : ''}` : 'Outros');
+  const ordemGrupo = (c) => (c.parado ? [-1, { 'aut-respondido': 0, 'aut-negado': 1, 'aut-aguardando': 2 }[c.passo.id] ?? 3] : [c.faseIndice ?? 99, c.passo ? ORDEM_PASSO[c.passo.id] ?? 9 : 9]);
+  const autorizadoNovo = (c) => c.autorizacao && c.autorizacao.status === 'autorizado' && !c.parado && c.paraHoje.some((t) => t.etapa === c.autorizacao.etapa);
+  const passaAba = (c) => estado.aba === 'todos'
+    || (estado.aba === 'atrasadas' ? c.paraHoje.some((t) => t.atrasada)
+      : estado.aba === 'autorizacao' ? c.parado
+        : estado.aba === 'autorizados' ? autorizadoNovo(c)
+          : chaveGrupo(c) === estado.aba);
 
   // Hoje: a fila do painel. Outro dia: a agenda daquele dia.
   const clientesBase = () => (estado.dia ? estado.agenda || [] : estado.painel.clientes);
@@ -203,8 +239,8 @@
     $('#metricas').replaceChildren(
       m({ cor: '--marca', rotulo: 'Para hoje', valor: r.paraHoje, detalhe: plural(r.clientesHoje, 'cliente', 'clientes') }),
       m({ cor: '--perigo', rotulo: 'Atrasadas', valor: r.atrasadas, detalhe: r.atrasadas ? 'de dias anteriores' : 'tudo em dia', aba: 'atrasadas' }),
-      m({ cor: '--alerta', rotulo: 'Aguardando autorização', valor: r.aguardandoAutorizacao || 0, detalhe: 'esperando o Lucas' }),
-      m({ cor: '--sucesso', rotulo: 'Autorizados', valor: r.autorizados || 0, detalhe: 'prontos para seguir' }),
+      m({ cor: '--alerta', rotulo: 'Aguardando autorização', valor: r.aguardandoAutorizacao || 0, detalhe: 'esperando o Lucas', aba: r.aguardandoAutorizacao ? 'autorizacao' : null }),
+      m({ cor: '--sucesso', rotulo: 'Autorizados', valor: r.autorizados || 0, detalhe: 'prontos para seguir', aba: r.autorizados ? 'autorizados' : null }),
     );
   }
 
@@ -220,7 +256,7 @@
       ...gruposDaFila(base).map((g) => aba(g.id, g.nome, g.itens.length)),
     );
     // Se o grupo escolhido sumiu (ex.: terminou), volta para "Todos".
-    if (estado.aba !== 'todos' && estado.aba !== 'atrasadas' && !gruposDaFila(base).some((g) => g.id === estado.aba)) estado.aba = 'todos';
+    if (!['todos', 'atrasadas', 'autorizacao', 'autorizados'].includes(estado.aba) && !gruposDaFila(base).some((g) => g.id === estado.aba)) estado.aba = 'todos';
   }
 
   function trocarAba(id) {
@@ -242,7 +278,7 @@
       el('span', { class: 'lc-meta' },
         el('span', { class: 'pontos', title: plural(c.paraHoje.length, 'tarefa no dia', 'tarefas no dia') },
           c.paraHoje.map((t) => el('i', { class: t.atrasada ? 'p-atrasada' : `p-${t.tipo}` }))),
-        el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', etapaTxt)),
+        el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', c.parado ? el('span', { class: `selo-mini aut-${c.autorizacao.status}` }, c.passo.nome) : etapaTxt)),
     el('span', { class: 'lc-direita' },
       chipDias(c.diasBloqueado),
       c.financeiro && c.financeiro.valorAberto ? el('span', { class: 'mono valor', title: 'Em aberto no SGP' }, dinheiro(c.financeiro.valorAberto)) : null));
@@ -422,6 +458,43 @@
         : null);
   }
 
+  function cartaoAutorizacao(d) {
+    const a = d.autorizacao;
+    if (!a || d.status !== 'ativo') return null;
+    if (a.status === 'autorizado' && !d.paraHoje.some((t) => t.etapa === a.etapa)) return null;
+    // Abriu a ficha: a resposta do Lucas foi vista (some do sino).
+    if (a.visto === false) api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: 'visto' }) }).then(() => carregarPainel()).catch(() => {});
+    const textos = {
+      aguardando: `O cliente não regularizou em "${a.etapaAnteriorNome}". O Lucas foi perguntado na ocorrência se pode seguir para "${a.etapaNome}". A etapa só começa depois da resposta dele.`,
+      negado: `O Lucas não autorizou seguir para "${a.etapaNome}". O cliente continua parado aqui.`,
+      respondido: `O Lucas respondeu, mas não deu para entender se autorizou. Confirme abaixo.`,
+      autorizado: `Autorizado. A etapa "${a.etapaNome}" começou no dia da autorização.`,
+    };
+    const acao = (nome, rotulo, classe, pergunta) => el('button', { class: `botao pequeno ${classe}`, onclick: (e) => responderAutorizacao(d, nome, pergunta, e.currentTarget) }, rotulo);
+    return el('section', { class: `cartao-aut aut-${a.status}` },
+      el('div', { class: 'cartao-aut-topo' }, el('span', { class: `selo-mini aut-${a.status}` }, d.passo && d.parado ? d.passo.nome : 'Autorizado'), a.pedidoEm ? el('small', {}, `Pedido em ${dataCurta(a.pedidoEm)}`) : null),
+      el('p', {}, textos[a.status]),
+      a.resposta && a.resposta.texto ? el('blockquote', {}, a.resposta.texto, el('cite', {}, `${a.resposta.por === 'admin' ? 'Lucas' : a.resposta.por || ''}${a.resposta.em ? ` · ${dataCurta(a.resposta.em)}` : ''}`)) : null,
+      d.parado ? el('div', { class: 'cartao-aut-acoes' },
+        acao('autorizar', a.status === 'aguardando' ? 'Lucas autorizou por fora' : 'Está autorizado', 'sim', 'Como o Lucas autorizou? (opcional)'),
+        a.status === 'respondido' ? acao('negar', 'Não autorizou', 'nao', 'Observação (opcional)') : null,
+        a.status !== 'aguardando' ? acao('pedir', 'Pedir de novo ao Lucas', 'fantasma', 'Mensagem para o Lucas (opcional)') : null) : null);
+  }
+  async function responderAutorizacao(d, acaoNome, pergunta, botao) {
+    if (!garantirUsuario()) return;
+    const observacao = prompt(pergunta, '');
+    if (observacao === null) return;
+    botao.disabled = true;
+    try {
+      await api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: acaoNome, observacao }) });
+      avisar({ autorizar: 'Autorizado: a próxima etapa começa hoje', negar: 'Marcado como não autorizado', pedir: 'Pedido enviado de novo ao Lucas' }[acaoNome]);
+      await aposAcao();
+    } catch (erro) {
+      botao.disabled = false;
+      avisar(erro.message, 'erro');
+    }
+  }
+
   function desenharFicha(d) {
     const fim = d.status !== 'ativo';
     const simples = d.paraHoje.filter((t) => t.tipo === 'acao');
@@ -482,6 +555,7 @@
             el('strong', {}, d.financeiro ? dinheiro(d.financeiro.valorAberto || 0) : '—', d.financeiro ? el('span', {}, plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')) : null)),
           el('div', { class: 'numero' }, el('small', {}, 'Etapa'), el('strong', {}, fim ? '—' : `${d.faseIndice + 1}/${d.fases.length}`, el('span', {}, fim ? '' : d.etapa.fase))),
           el('div', { class: 'numero' }, el('small', {}, 'Próximo passo'), el('strong', {}, d.paraHoje.length ? 'Hoje' : proxima ? dataCurta(proxima.data) : '—'))),
+        cartaoAutorizacao(d),
         blocoCliente(d.dadosCliente),
         el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
         d.paraHoje.length ? el('section', {},
@@ -990,6 +1064,8 @@
     recarregar();
   });
   $('#form-promessa').addEventListener('submit', enviarPromessa);
+  $('#sino').addEventListener('click', (e) => { e.stopPropagation(); alternarSino(); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.sino-area')) alternarSino(false); });
   $('#form-registro').addEventListener('submit', enviarRegistro);
   $('#form-registro').addEventListener('input', aoMudarRegistro);
   $('#form-registro').addEventListener('change', aoMudarRegistro);

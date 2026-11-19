@@ -49,6 +49,8 @@ module.exports = {
     responsavelOs: (process.env.SGP_RESPONSAVEL_OS || '').trim(),
     // Supervisor (ex.: Lucas): marcado no fim de cada etapa (username do SGP).
     supervisor: (process.env.SGP_SUPERVISOR || '').trim(),
+    // Antes de começar a próxima etapa (depois de um "não regularizou"), espera a resposta do supervisor na ocorrência.
+    exigirAutorizacao: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_AUTORIZACAO || 'sim'),
     // Nomes para a saudação dos comentários: "admin=Lucas,jessica_rasteiro=Jéssica".
     nomes: Object.fromEntries((process.env.SGP_NOMES || '').split(',').map((p) => p.split('=').map((x) => x.trim())).filter(([u, n]) => u && n)),
     // Usuário próprio da integração no SGP (para comentar em ocorrência pela rota da tela).

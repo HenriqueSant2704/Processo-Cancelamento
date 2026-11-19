@@ -25,6 +25,9 @@ function criarFonteExemplo(hoje) {
     async listarClientesBloqueados() {
       return clientes.map(({ diasBloqueado, ...c }) => ({ ...c, bloqueadoEm: adicionarDias(hoje, -diasBloqueado), financeiro: { valorAberto: 99.9, faturasAbertas: 1 } }));
     },
+    async comentariosDaOcorrencia() {
+      return [];
+    },
     async listarFichas(contratos) {
       return fichasExemplo(contratos, hoje);
     },

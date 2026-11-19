@@ -8,6 +8,7 @@ const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
 const { posicionar, registrarPromessa, obterEtapa } = require('../cronograma/motor');
 const { registrar } = require('../auditoria/historico');
+const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo } = require('../processos/autorizacao');
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 
@@ -159,11 +160,21 @@ function criarApp(opcoes) {
       mensagem, titulo: `Etapa encerrada: ${anterior.nome}`,
       marcar: [supervisorSgp || responsavelSgp],
     });
-    if (nova) {
-      const afazer = processo.tarefas.filter((t) => t.etapa === nova.id && t.status === 'pendente');
-      comentar(processo, { tipo: 'inicio-etapa', etapa: nova.nome, tarefas: afazer, por, data: hoje(), marcar: [responsavelSgp] });
-    }
+    // Esperando o supervisor: o início da próxima etapa só é comentado quando ele autorizar.
+    if (nova && !bloqueada(processo)) comentarInicioDaEtapa(processo, por);
   };
+  const comentarInicioDaEtapa = (processo, por) => {
+    const nova = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
+    if (!nova) return;
+    const afazer = processo.tarefas.filter((t) => t.etapa === nova.id && t.status === 'pendente');
+    comentar(processo, { tipo: 'inicio-etapa', etapa: nova.nome, tarefas: afazer, por, data: hoje(), marcar: [responsavelSgp] });
+  };
+  // A leitura automática (servidor) achou "autorizado": comenta o início da etapa para a Jéssica.
+  if (typeof opcoes.registrarAoAutorizar === 'function') {
+    opcoes.registrarAoAutorizar((processo) => {
+      if (processo.autorizacao && processo.autorizacao.status === 'autorizado') comentarInicioDaEtapa(processo, 'sistema');
+    });
+  }
   const hoje = () => hojeISO();
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
@@ -279,6 +290,37 @@ function criarApp(opcoes) {
         }
         return responderJson(res, 200, await detalhe(processo, hoje));
       }
+      // Autorização do supervisor: a Jéssica confirma (autorizado/negado), pede de novo ou marca o aviso como visto.
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/autorizacao$/))) {
+        const corpo = await lerCorpo(req);
+        const processo = await repositorio.obter(m[1]);
+        if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
+        if (!processo.autorizacao) throw new ErroHttp(400, 'Este cliente não está aguardando autorização.');
+        const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
+        if (!por) throw new ErroHttp(400, 'Informe quem está registrando.');
+        const observacao = typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : '';
+        const antes = processo.autorizacao.status;
+        if (corpo.acao === 'autorizar' || corpo.acao === 'negar') {
+          aplicarResposta(processo, { status: corpo.acao === 'autorizar' ? 'autorizado' : 'negado', texto: observacao || undefined, por, origem: por }, cronograma, hoje);
+        } else if (corpo.acao === 'pedir') {
+          pedirDeNovo(processo, { por, data: hoje });
+        } else if (corpo.acao === 'visto') {
+          processo.autorizacao.visto = true;
+        } else {
+          throw new ErroHttp(400, 'Ação de autorização inválida.');
+        }
+        try {
+          await repositorio.salvarProcesso(processo);
+        } catch (erro) {
+          if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
+          throw erro;
+        }
+        if (corpo.acao === 'autorizar' && antes !== 'autorizado') comentarInicioDaEtapa(processo, por);
+        if (corpo.acao === 'pedir') {
+          comentar(processo, { tipo: 'aviso', titulo: 'Pedido de autorização', texto: `${observacao ? `${observacao} ` : ''}Posso dar continuidade? A próxima etapa só começa depois da sua resposta aqui na ocorrência.`, por, data: hoje, marcar: [supervisorSgp || responsavelSgp] });
+        }
+        return responderJson(res, 200, await detalhe(processo, hoje));
+      }
       // Anotação livre do financeiro: fica no histórico e vai para a ocorrência sem marcar ninguém.
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/registro$/))) {
         const corpo = await lerCorpo(req);
@@ -358,6 +400,11 @@ function criarApp(opcoes) {
             ? { tipo: 'registro', titulo: `Registro: ${tarefa.descricao}`, texto: tarefa.observacao, por: tarefa.concluidaPor, data: hoje, marcar: [] }
             : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao };
           if (trocouEtapa) {
+            // "Não regularizou" e há próxima etapa: espera a autorização do supervisor antes de começar.
+            if (opcoes.exigirAutorizacao && tarefa.resposta === 'nao' && processo.status === 'ativo' && processo.etapaAtual) {
+              pedirAutorizacao(processo, { etapaAnterior: tarefa.etapa, etapa: processo.etapaAtual, data: hoje, por: tarefa.concluidaPor });
+              await repositorio.salvarProcesso(processo);
+            }
             // Fim de etapa: comentário para o supervisor (Lucas) e, se houver, início da próxima para a Jéssica.
             if (tarefa.tipo !== 'decisao') comentar(processo, eventoTarefa);
             avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : '') });

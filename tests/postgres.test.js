@@ -161,3 +161,17 @@ test('Postgres: data remarcada de uma tarefa existente fica gravada (aviso atras
   const datas = relido.tarefas.filter((x) => x.status === 'pendente' && x.tipo === 'contato').map((x) => x.data);
   assert.deepStrictEqual(datas, ['2026-11-19', '2026-11-23']);
 });
+
+test('Postgres: guarda a autorização do supervisor', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  const id = await repo.proximoId();
+  const p = criarProcesso({ id, cliente: { id: '88', nome: 'Cliente', contrato: 'C-88' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.autorizacao = { status: 'aguardando', etapa: 'negativacao', pedidoEm: '2026-11-23', visto: true };
+  await repo.salvarProcesso(p);
+  const lido = await repo.obter(id);
+  assert.deepStrictEqual(lido.autorizacao, p.autorizacao);
+  lido.autorizacao.status = 'autorizado';
+  await repo.salvarProcesso(lido);
+  assert.strictEqual((await repo.obter(id)).autorizacao.status, 'autorizado');
+  assert.strictEqual((await repo.listar())[0].autorizacao.status, 'autorizado');
+});

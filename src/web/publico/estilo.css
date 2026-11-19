@@ -517,3 +517,32 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 .lt-detalhe summary { cursor: pointer; font-size: 12px; color: var(--marca-texto); margin-top: 4px; }
 .lt-nota.registro { white-space: pre-line; }
 @media (max-width: 640px) { .tentativa { grid-template-columns: 1fr 1fr; } .tentativa select { grid-column: 1 / -1; } .tent-nota { grid-column: 1 / -1; } }
+
+/* Autorização do Lucas */
+.sino-area { position: relative; }
+.sino { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--linha); border-radius: 9px; background: var(--superficie); color: var(--texto-2); }
+.sino svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sino.tem { color: var(--alerta); border-color: var(--alerta); }
+.sino b { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--perigo); color: #fff; font: 700 10.5px/18px var(--mono); }
+.sino-lista { position: absolute; right: 0; top: 42px; z-index: 30; width: min(360px, calc(100vw - 32px)); max-height: 420px; overflow: auto; padding: 8px; border: 1px solid var(--linha-forte); border-radius: 12px; background: var(--superficie); box-shadow: var(--sombra-alta); }
+.sino-titulo { padding: 4px 6px 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-3); }
+.sino-item { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: none; color: var(--texto); text-align: left; }
+.sino-item:hover { background: var(--superficie-2); }
+.sino-texto { font-size: 12px; color: var(--texto-2); }
+.sino-vazio { margin: 4px 6px 8px; font-size: 12.5px; }
+.selo-mini { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--superficie-3); color: var(--texto-2); white-space: nowrap; }
+.selo-mini.aut-aguardando { background: var(--alerta-suave); color: var(--alerta); }
+.selo-mini.aut-negado { background: var(--perigo-suave); color: var(--perigo); }
+.selo-mini.aut-respondido { background: var(--marca-suave); color: var(--marca-texto); }
+.selo-mini.aut-autorizado { background: var(--sucesso-suave); color: var(--sucesso); }
+.cartao-aut { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--linha); background: var(--superficie-2); }
+.cartao-aut.aut-aguardando { border-color: var(--alerta); background: var(--alerta-suave); }
+.cartao-aut.aut-negado { border-color: var(--perigo); background: var(--perigo-suave); }
+.cartao-aut.aut-respondido { border-color: var(--marca); background: var(--marca-suave); }
+.cartao-aut.aut-autorizado { border-color: var(--sucesso); background: var(--sucesso-suave); }
+.cartao-aut-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cartao-aut-topo small { font-size: 11.5px; color: var(--texto-3); }
+.cartao-aut p { margin: 8px 0 0; font-size: 13px; color: var(--texto); }
+.cartao-aut blockquote { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid currentColor; border-radius: 6px; background: var(--superficie); font-size: 13px; white-space: pre-line; }
+.cartao-aut cite { display: block; margin-top: 4px; font-size: 11px; font-style: normal; color: var(--texto-3); }
+.cartao-aut-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

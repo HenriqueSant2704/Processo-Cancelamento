@@ -73,6 +73,13 @@ function criarFonteApi(config, opcoesApi = {}) {
       }
       return porContrato;
     },
+    // Comentários de uma ocorrência (para ler a resposta do supervisor): [{ usuario, comentario, data_cadastro }]
+    async comentariosDaOcorrencia(numero) {
+      const origem = new URL(config.sgp.uraClientesUrl).origin;
+      const oc = criarApiOcorrencias({ origem, app: config.sgp.app, token: config.sgp.token, ...(opcoesApi.ocorrencias || {}) });
+      const achada = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
+      return achada && Array.isArray(achada.comentarios) ? achada.comentarios : [];
+    },
     // Feriados cadastrados no SGP (os recorrentes valem para este ano e os 2 próximos).
     async listarFeriados() {
       const { getComCorpo } = require('./ocorrencias');

@@ -127,37 +127,54 @@ test('sem a exigência ligada, o processo segue direto como antes', async (t) =>
   assert.ok(d.paraHoje.length > 0);
 });
 
-test('regra do Pendente: "não regularizou" só passa com a ocorrência Pendente no SGP', async (t) => {
+test('regra do Pendente: o pedido ao Lucas ("não regularizou") NÃO confere o status', async (t) => {
   const repositorio = new RepositorioJson(null);
   const p = await prepararNaoRegularizou(repositorio);
+  const consultas = [];
+  const chamar = subir(t, { repositorio, statusOcorrenciaSgp: async (n) => { consultas.push(n); return 0; } });
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
+  const r = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(consultas, []);
+});
+
+// Processo na negativação: falta só "Enviar notificação informando a negativação" (o negativar já foi feito).
+async function prepararFimDaNegativacao(repositorio) {
+  const { posicionar } = require('../src/cronograma/motor');
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-03', inicio: '2026-11-04', cronograma });
+  posicionar(p, { etapaId: 'negativacao', por: 'Jessica', data: '2026-11-23' }, cronograma);
+  p.ocorrencia = { numero: '999' };
+  const negativar = p.tarefas.find((x) => x.descricao === 'Negativar o cliente' && x.status === 'pendente');
+  concluirTarefa(p, negativar.id, { por: 'Jessica', data: '2026-11-23' }, cronograma);
+  await repositorio.salvarProcesso(p);
+  return p.tarefas.find((x) => x.etapa === 'negativacao' && x.status === 'pendente');
+}
+
+test('regra do Pendente: a negativação só termina com a ocorrência Pendente no SGP', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  const ultima = await prepararFimDaNegativacao(repositorio);
   let status = 0;
   const consultas = [];
   const chamar = subir(t, { repositorio, statusOcorrenciaSgp: async (n) => { consultas.push(n); return status; } });
-  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
-  const caminho = `/api/tarefas/${decisao.id}/concluir?data=2026-11-23`;
-
-  let r = await chamar(caminho, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  const caminho = `/api/tarefas/${ultima.id}/concluir?data=2026-11-23`;
+  let r = await chamar(caminho, { por: 'Jessica' });
   assert.strictEqual(r.status, 409);
-  assert.match(r.json.erro, /coloque a ocorrência 999 como Pendente no SGP\. Verifiquei agora e ela ainda está Aberta/);
+  assert.match(r.json.erro, /coloque a ocorrência 999 como Pendente no SGP. Verifiquei agora e ela ainda está Aberta/);
   assert.deepStrictEqual(consultas, ['999']);
-  assert.strictEqual((await repositorio.obter('1')).tarefas.find((x) => x.id === decisao.id).status, 'pendente');
-
+  assert.strictEqual((await repositorio.obter('1')).etapaAtual, 'negativacao');
   status = 3;
-  r = await chamar(caminho, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  r = await chamar(caminho, { por: 'Jessica' });
   assert.strictEqual(r.status, 200);
-  assert.notStrictEqual(r.json.etapaAtual, decisao.etapa);
+  assert.strictEqual(r.json.etapa.id, 'aguardo-negativado');
 });
 
-test('regra do Pendente: "regularizou" não depende do status e SGP fora do ar dá aviso claro', async (t) => {
+test('regra do Pendente: SGP fora do ar dá aviso claro', async (t) => {
   const repositorio = new RepositorioJson(null);
-  const p = await prepararNaoRegularizou(repositorio);
+  const ultima = await prepararFimDaNegativacao(repositorio);
   const chamar = subir(t, { repositorio, statusOcorrenciaSgp: async () => { throw new Error('fora'); } });
-  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
-  const r = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'x' });
+  const r = await chamar(`/api/tarefas/${ultima.id}/concluir?data=2026-11-23`, { por: 'Jessica' });
   assert.strictEqual(r.status, 503);
   assert.match(r.json.erro, /Não consegui conferir/);
-  const ok = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'sim', observacao: 'Pagou' });
-  assert.strictEqual(ok.status, 200);
 });
 
 test('resposta do Lucas é achada depois do pedido escrito pela Jéssica (texto livre)', () => {

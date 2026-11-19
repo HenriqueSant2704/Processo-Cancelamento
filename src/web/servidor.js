@@ -149,7 +149,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   const statusOcorrenciaSgp = !modoDemo && config.sgp.modo === 'api' && config.sgp.exigirPendente
     ? (numero) => criarSgp(hojeISO()).statusDaOcorrencia(numero)
     : null;
-  if (statusOcorrenciaSgp) console.log('Regra do Pendente: LIGADA (para encerrar etapa com "não regularizou", a ocorrência precisa estar Pendente).');
+  if (statusOcorrenciaSgp) console.log('Regra do Pendente: LIGADA (para encerrar a negativação e o cancelamento, a ocorrência precisa estar Pendente).');
 
   const app = criarApp({
     exigirAutorizacao,

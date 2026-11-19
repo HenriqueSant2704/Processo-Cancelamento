@@ -204,8 +204,12 @@ function criarApp(opcoes) {
     if (typeof opcoes.statusOcorrenciaSgp !== 'function') return;
     const processo = await repositorio.obterPorTarefa(tarefaId);
     const tarefa = processo && processo.tarefas.find((t) => t.id === tarefaId);
-    // Só a pergunta "regularizou?" que encerra a etapa (promessa não cumprida volta aos avisos da mesma etapa).
-    if (!tarefa || tarefa.tipo !== 'decisao' || tarefa.status !== 'pendente' || tarefa.promessa) return;
+    // Só a ÚLTIMA ação de uma etapa marcada com exigePendente no cronograma (ex.: negativou e avisou o Lucas).
+    // O pedido de autorização ao Lucas ("não regularizou") não confere: nessa hora a ocorrência ainda não está Pendente.
+    if (!tarefa || tarefa.tipo !== 'acao' || tarefa.status !== 'pendente') return;
+    const etapa = cronograma.etapas.find((e) => e.id === tarefa.etapa);
+    if (!etapa || !etapa.exigePendente) return;
+    if (processo.tarefas.some((t) => t.etapa === tarefa.etapa && t.status === 'pendente' && t.id !== tarefa.id)) return;
     if (!processo.ocorrencia || !processo.ocorrencia.numero) return; // sem ocorrência ligada não há o que conferir
     let status;
     try {
@@ -457,7 +461,7 @@ function criarApp(opcoes) {
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
         const corpo = await lerCorpo(req, 6_000_000); // cabe o print do aviso (até 4 MB em base64)
         const texto = (v, max = 1000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
-        if (corpo.resposta === 'nao') await conferirPendente(m[1]);
+        await conferirPendente(m[1]);
         // Print do aviso: obrigatório para marcar um aviso (contato) como feito, quando ligado.
         let print = null;
         if (corpo.print) {

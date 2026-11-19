@@ -55,7 +55,7 @@ module.exports = {
     supervisor: (process.env.SGP_SUPERVISOR || '').trim(),
     // Antes de começar a próxima etapa (depois de um "não regularizou"), espera a resposta do supervisor na ocorrência.
     exigirAutorizacao: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_AUTORIZACAO || 'sim'),
-    // Para encerrar uma etapa com "não regularizou", a ocorrência precisa estar Pendente no SGP (a Jéssica muda lá).
+    // Para encerrar a negativação e o cancelamento (etapas com exigePendente), a ocorrência precisa estar Pendente no SGP (a Jéssica muda lá).
     exigirPendente: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_PENDENTE || 'sim'),
     // Print do aviso enviado como anexo da ocorrência (GRAVA no SGP). Nomes dos campos do formulário de anexo do SGP.
     enviarPrint: /^(sim|true|1)$/i.test(process.env.SGP_ENVIAR_PRINT || ''),

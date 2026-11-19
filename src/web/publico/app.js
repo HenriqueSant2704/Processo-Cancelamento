@@ -456,7 +456,7 @@
     const perguntar = perguntarRetorno(t);
     const checagens = enviado ? t.retorno.checagens || [] : [];
     const quando = t.atrasada && !enviado
-      ? el('small', { class: 'atrasada' }, `Atrasada desde ${dataCurta(t.data)} (${plural(diasEntre(t.data, hoje()), 'dia', 'dias')})`)
+      ? el('small', { class: 'atrasada' }, `Atrasada desde ${dataCurta(t.data)} (${plural(diasEntre(t.data, hoje()), 'dia', 'dias')})`, (() => { const prox = t.tipo === 'contato' && (d.tarefas || []).find((x) => x.dataProjetada && x.etapa === t.etapa && x.tipo === 'contato'); return prox ? el('span', { class: 'proximo-aviso' }, ` · fazendo hoje, o próximo aviso fica para ${dataCurta(prox.dataProjetada)}`) : null; })())
       : enviado
         ? el('small', { class: perguntar ? 'perguntar' : '' }, `Enviado às ${horaDe(t.retorno.enviadoEm)}${t.retorno.enviadoPor ? ` por ${t.retorno.enviadoPor}` : ''} · `, perguntar ? el('b', {}, 'hora de perguntar: teve retorno?') : `nova pergunta às ${horaDe(t.retorno.proximaChecagem)}`)
         : el('small', {}, t.anexoObrigatorio ? 'Ação no SGP · precisa anexar o arquivo (print ou PDF)' : { contato: 'Envie o aviso e marque "Enviei"', acao: 'Ação no SGP', decisao: 'Responda para o processo seguir' }[t.tipo]);
@@ -633,7 +633,9 @@
                 el('button', { class: 'botao sim pequeno', onclick: () => abrirDecisao(d, t, 'sim') }, ico('check'), 'Sim'),
                 el('button', { class: 'botao nao pequeno', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'))
             : null),
-        el('span', { class: 'lt-data' }, dataCurta(t.data))));
+        t.dataProjetada
+          ? el('span', { class: 'lt-data projetada', title: `Era ${dataCurta(t.data)}. Fazendo hoje o aviso atrasado, passa para ${dataCurta(t.dataProjetada)}.` }, el('s', {}, dataCurta(t.data)), dataCurta(t.dataProjetada))
+          : el('span', { class: 'lt-data' }, dataCurta(t.data))));
     }
 
     const situacao = fim

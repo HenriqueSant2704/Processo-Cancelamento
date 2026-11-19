@@ -78,3 +78,22 @@ test('retorno do cliente exige texto e prova (print ou PDF) quando o print é ob
   // "Sem retorno" não pede prova.
   assert.strictEqual((await chamar(`/api/tarefas/${aviso.id}/retorno${d}`, { por: 'Jessica', resultado: 'sem-retorno' })).status, 200);
 });
+
+test('aviso atrasado: a ficha mostra as novas datas e o recálculo conta do dia do envio', async (t) => {
+  const cronograma = carregarCronograma();
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  for (const x of p.tarefas.filter((y) => y.tipo === 'acao')) Object.assign(x, { status: 'concluida', concluidaEm: x.data, concluidaPor: 'J' });
+  await repositorio.salvarProcesso(p);
+  let relogio = '2026-11-18T12:00:00.000Z';
+  const chamar = subir(t, { repositorio, agora: () => relogio });
+  const [a1, a2] = p.tarefas.filter((x) => x.tipo === 'contato');
+  // 1º aviso era 16/11; hoje é 18/11: o 2º (18/11 no plano) passa para 20/11 se ela fizer hoje.
+  let ficha = (await chamar('/api/processos/1?data=2026-11-18')).json;
+  assert.strictEqual(ficha.tarefas.find((x) => x.id === a2.id).dataProjetada, '2026-11-20');
+  // Enviou dia 18, mas só finalizou dia 19: conta do dia 18.
+  await chamar(`/api/tarefas/${a1.id}/enviado?data=2026-11-18`, { por: 'Jessica' });
+  relogio = '2026-11-19T12:00:00.000Z';
+  ficha = (await chamar(`/api/tarefas/${a1.id}/concluir?data=2026-11-19`, { por: 'Jessica', observacao: 'REGISTRO', registro: true })).json;
+  assert.strictEqual(ficha.tarefas.find((x) => x.id === a2.id).data, '2026-11-20');
+});

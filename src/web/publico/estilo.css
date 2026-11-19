@@ -676,3 +676,8 @@ button.faixa-item:hover { border-color: var(--cor); }
 /* Erro dentro da janela aberta (ex.: "coloque a ocorrência como Pendente") */
 .janela-erro { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--perigo); border-radius: 10px; background: var(--perigo-suave); color: var(--perigo); font-size: 13px; font-weight: 600; animation: subir .2s ease; }
 .janela-erro svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Aviso atrasado: data antiga riscada e a nova (se for feito hoje) */
+.lt-data.projetada { display: flex; flex-direction: column; align-items: flex-end; color: var(--alerta); }
+.lt-data.projetada s { color: var(--texto-3); font-size: 10.5px; }
+.tarefa-texto small .proximo-aviso { color: var(--texto-2); font-weight: 500; }

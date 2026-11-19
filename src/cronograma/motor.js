@@ -172,13 +172,16 @@ function concluirTarefa(processo, tarefaId, { por, data, observacao, resposta },
 
   // Aviso feito DEPOIS do dia marcado: os próximos avisos e a pergunta "regularizou?"
   // são recalculados a partir do dia em que ele foi realmente feito.
-  if (tarefa.tipo === 'contato' && etapa.tipo === 'contatos' && data > tarefa.data) {
+  // O dia real é o dia em que o aviso foi ENVIADO ("Enviei"), mesmo que ela finalize depois.
+  const diaEnvio = tarefa.retorno && tarefa.retorno.enviadoEm ? new Date(tarefa.retorno.enviadoEm).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : null;
+  const diaReal = diaEnvio && diaEnvio <= data ? diaEnvio : data;
+  if (tarefa.tipo === 'contato' && etapa.tipo === 'contatos' && diaReal > tarefa.data) {
     const feriados = cronograma.feriados || [];
     const restantes = processo.tarefas
       .filter((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo === 'contato')
       .sort((a, b) => a.data.localeCompare(b.data));
-    let dia = adicionarDiasUteis(data, etapa.intervaloDiasUteis, feriados);
-    let ultimo = data;
+    let dia = adicionarDiasUteis(diaReal, etapa.intervaloDiasUteis, feriados);
+    let ultimo = diaReal;
     for (const t of restantes) {
       t.data = dia;
       ultimo = dia;

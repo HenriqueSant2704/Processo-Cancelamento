@@ -1,6 +1,6 @@
 // Monta os dados já "mastigados" para a tela: o que fazer hoje, atrasados,
 // decisões pendentes, próximos dias e o resumo de cada cliente.
-const { diasEntre, adicionarDiasUteis } = require('../utils/datas');
+const { diasEntre, adicionarDiasUteis, proximoDiaUtil, ehDiaUtil } = require('../utils/datas');
 const { obterEtapa, obterFluxo } = require('../cronograma/motor');
 const { bloqueada, NOMES: NOMES_AUTORIZACAO } = require('../processos/autorizacao');
 
@@ -160,6 +160,25 @@ function detalheProcesso(processo, hoje, cronograma) {
     const e = cronograma.etapas.find((x) => x.id === t.etapa);
     return e && e.ocorrenciaSgp && e.ocorrenciaSgp.acao === t.descricao ? e.ocorrenciaSgp.tipo : null;
   };
+  // Aviso atrasado: mostra como ficam os próximos se ele for feito HOJE (é assim que o sistema recalcula
+  // quando ela marca). Só para exibir; as datas gravadas mudam quando o aviso é feito.
+  const projetadas = new Map();
+  const etapaAtual = processo.etapaAtual ? cronograma.etapas.find((e) => e.id === processo.etapaAtual) : null;
+  if (etapaAtual && etapaAtual.tipo === 'contatos' && processo.status === 'ativo') {
+    const feriados = cronograma.feriados || [];
+    const pend = processo.tarefas.filter((t) => t.etapa === etapaAtual.id && t.status === 'pendente' && t.tipo === 'contato').sort(porData);
+    if (pend.length && pend[0].data < hoje) {
+      let dia = ehDiaUtil(hoje, feriados) ? hoje : proximoDiaUtil(hoje, feriados);
+      let ultimo = dia;
+      for (const [i, t] of pend.entries()) {
+        if (i > 0) projetadas.set(t.id, dia);
+        ultimo = dia;
+        dia = adicionarDiasUteis(dia, etapaAtual.intervaloDiasUteis, feriados);
+      }
+      const pergunta = processo.tarefas.find((t) => t.etapa === etapaAtual.id && t.status === 'pendente' && t.tipo === 'decisao' && !t.promessa);
+      if (pergunta) projetadas.set(pergunta.id, adicionarDiasUteis(ultimo, (etapaAtual.decisao && etapaAtual.decisao.diasUteisAposUltimoContato) || 0, feriados));
+    }
+  }
   const v0 = visaoProcesso(processo, hoje, cronograma);
   const exigeAnexo = (t) => { const e = cronograma.etapas.find((x) => x.id === t.etapa); return Boolean(e && (e.anexoObrigatorio || []).includes(t.descricao)); };
   const v = { ...v0, paraHoje: v0.paraHoje.map((t) => ({ ...t, ocorrenciaTipo: criaOcorrencia(t), anexoObrigatorio: exigeAnexo(t) })) };
@@ -171,7 +190,7 @@ function detalheProcesso(processo, hoje, cronograma) {
     fases: fluxo.fases,
     faseIndice: v.etapa ? fluxo.fases.indexOf(v.etapa.fase) : -1,
     etapasAjustaveis: cronograma.etapas.filter((e) => doFluxo(e) && ['contatos', 'aguardo', 'acao'].includes(e.tipo)).map((e) => ({ id: e.id, nome: e.nome, tipo: e.tipo, tentativas: e.tentativas || 0 })),
-    tarefas: [...processo.tarefas].sort(porData).map((t) => ({ ...t, etapaNome: nomes[t.etapa] || t.etapa })),
+    tarefas: [...processo.tarefas].sort(porData).map((t) => ({ ...t, etapaNome: nomes[t.etapa] || t.etapa, ...(projetadas.has(t.id) && projetadas.get(t.id) !== t.data ? { dataProjetada: projetadas.get(t.id) } : {}) })),
     historico: [...processo.historico].reverse(),
   };
 }

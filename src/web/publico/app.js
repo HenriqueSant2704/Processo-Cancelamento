@@ -900,18 +900,35 @@
     f.reset();
     $('#retorno-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#retorno-quando').textContent = `${t.descricao}, enviado às ${horaDe(t.retorno.enviadoEm)}.`;
+    retornoAtual.arquivo = null;
+    $('#retorno-previa').hidden = true;
+    $('#retorno-previa').removeAttribute('src');
+    $('#retorno-dica').textContent = 'Clique para escolher o arquivo ou cole o print com Ctrl+V';
     prepararMarcar(f);
     efeitoRetorno();
     $('#janela-retorno').showModal();
   }
+  // Prova do retorno (print ou PDF), escolhida ou colada.
+  function usarProvaRetorno(arquivo) {
+    if (!arquivo || !retornoAtual) return;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(arquivo.type)) { avisar('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.', 'erro'); return; }
+    if (arquivo.size > 4 * 1024 * 1024) { avisar('O arquivo passou de 4 MB.', 'erro'); return; }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      retornoAtual.arquivo = { nome: arquivo.name || (arquivo.type === 'application/pdf' ? 'retorno.pdf' : 'retorno.png'), tipo: arquivo.type, base64: String(leitor.result) };
+      const pdf = arquivo.type === 'application/pdf';
+      $('#retorno-previa').hidden = pdf;
+      if (!pdf) $('#retorno-previa').src = retornoAtual.arquivo.base64;
+      $('#retorno-dica').textContent = pdf ? `PDF: ${retornoAtual.arquivo.nome} (clique para trocar)` : 'Clique ou cole outro para trocar';
+    };
+    leitor.readAsDataURL(arquivo);
+  }
   function efeitoRetorno() {
     const tipo = $('#form-retorno').tipo.value;
-    $('#retorno-campo').hidden = tipo !== 'outro';
-    $('#form-retorno').texto.required = tipo === 'outro';
     $('#retorno-efeito').textContent = {
-      regularizou: 'Abre a confirmação de regularização: os avisos desta etapa se encerram.',
-      promessa: 'Abre a promessa de pagamento: os próximos avisos ficam pausados até a data.',
-      outro: 'Fica anotado aqui e na ocorrência. O aviso continua aberto: finalize quando terminar as tentativas.',
+      regularizou: 'Registra o retorno com a prova e abre a confirmação de regularização: os avisos desta etapa se encerram.',
+      promessa: 'Registra o retorno com a prova e abre a promessa de pagamento: os próximos avisos ficam pausados até a data.',
+      outro: 'Fica anotado aqui e na ocorrência, com a prova. O aviso continua aberto: finalize quando terminar as tentativas.',
     }[tipo] || '';
   }
   async function enviarRetorno(e) {
@@ -919,21 +936,28 @@
     const f = e.currentTarget;
     if (!f.reportValidity()) return;
     const { d, t } = retornoAtual;
-    if (f.tipo.value === 'regularizou') {
-      $('#janela-retorno').close();
-      const decisao = decisaoDaEtapa(d, t);
-      if (decisao) abrirDecisao(d, decisao, 'sim'); else avisar('Esta etapa não tem a pergunta "regularizou?".', 'erro');
-      return;
-    }
-    if (f.tipo.value === 'promessa') { $('#janela-retorno').close(); abrirPromessa(d); return; }
+    if (!retornoAtual.arquivo) { avisar('Anexe a prova do retorno (print da conversa ou PDF).', 'erro'); $('#retorno-alvo').focus(); return; }
+    const tipo = f.tipo.value;
+    const rotulo = { regularizou: 'Regularizou', promessa: 'Fez promessa', outro: 'Retorno' }[tipo];
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: f.texto.value, marcar: marcadosEm(f) }) });
+      // Todo retorno fica registrado com o texto e a prova; depois abre o próximo passo, se houver.
+      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: `${rotulo}: ${f.texto.value}`, print: retornoAtual.arquivo, marcar: marcadosEm(f) }) });
+      const texto = f.texto.value;
       $('#janela-retorno').close();
-      avisar('Retorno do cliente registrado');
+      const atual = await api(`/api/processos/${d.id}`);
+      if (tipo === 'regularizou') {
+        const decisao = decisaoDaEtapa(atual, t);
+        if (decisao) { abrirDecisao(atual, decisao, 'sim'); $('#form-decisao').observacao.value = texto; } else avisar('Esta etapa não tem a pergunta "regularizou?".', 'erro');
+      } else if (tipo === 'promessa') {
+        abrirPromessa(atual);
+        $('#form-promessa').observacao.value = texto.slice(0, 300);
+      } else {
+        avisar('Retorno do cliente registrado');
+      }
       await recarregar();
-      selecionar(d.id);
+      if (tipo === 'outro') selecionar(d.id);
     } catch (erro) {
       avisar(erro.message, 'erro');
     } finally {
@@ -1379,6 +1403,12 @@
   $('#form-promessa').addEventListener('submit', enviarPromessa);
   $('#funil-topo').addEventListener('click', () => trocarVista('etapas'));
   $('#form-retorno').addEventListener('submit', enviarRetorno);
+  $('#form-retorno').anexo.addEventListener('change', (e) => { usarProvaRetorno(e.target.files[0]); e.target.value = ''; });
+  $('#retorno-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-retorno').anexo.click(); } });
+  $('#janela-retorno').addEventListener('paste', (e) => {
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file');
+    if (item) { e.preventDefault(); usarProvaRetorno(item.getAsFile()); }
+  });
   $('#form-retorno').addEventListener('change', efeitoRetorno);
   $('#retorno-cancelar').addEventListener('click', () => $('#janela-retorno').close());
   $('#filtro-passo').addEventListener('change', (e) => trocarAba(e.target.value));

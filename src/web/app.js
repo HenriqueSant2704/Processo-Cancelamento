@@ -434,7 +434,13 @@ function criarApp(opcoes) {
       }
       // Aviso em dois passos: "Enviei" e, depois, "Teve retorno?" a cada X horas.
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/(enviado|retorno)$/))) {
-        const corpo = await lerCorpo(req);
+        const corpo = await lerCorpo(req, 6_000_000); // cabe a prova do retorno (até 4 MB)
+        // Retorno do cliente: exige a prova (print ou PDF), quando o print obrigatório está ligado.
+        let prova = null;
+        if (m[2] === 'retorno' && corpo.resultado === 'retorno') {
+          if (corpo.print) { try { prova = lerPrint(corpo.print); } catch (erro) { throw new ErroHttp(400, erro.message); } }
+          else if (printObrigatorio) throw new ErroHttp(400, 'Anexe a prova do retorno (print da conversa ou PDF).');
+        }
         const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
         const processo = await repositorio.obterPorTarefa(m[1]);
         if (!processo) throw new ErroHttp(404, `Tarefa ${m[1]} não encontrada.`);
@@ -445,6 +451,10 @@ function criarApp(opcoes) {
           } else {
             const tarefa = registrarChecagem(processo, m[1], { por, agora: momento, data: hoje, resultado: corpo.resultado, texto: corpo.texto }, cronograma);
             await repositorio.salvarProcesso(processo);
+            if (prova && typeof repositorio.salvarAnexo === 'function') {
+              const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...prova, em: hoje, por });
+              enviarPrint(processo, anexoId, prova, `Prova do retorno: ${tarefa.descricao}`);
+            }
             if (corpo.resultado === 'retorno') {
               comentar(processo, { tipo: 'registro', titulo: `Retorno do cliente: ${tarefa.descricao}`, texto: tarefa.retorno.checagens.at(-1).texto, por, data: hoje, marcar: marcadosDe(corpo) });
             }

@@ -197,10 +197,18 @@
         <label class="opcao promessa"><input type="radio" name="tipo" value="promessa" required><span>Fez promessa</span></label>
         <label class="opcao outro"><input type="radio" name="tipo" value="outro" required><span>Outro retorno</span></label>
       </div>
-      <label class="campo" id="retorno-campo" hidden>
+      <label class="campo" id="retorno-campo">
         <span>O que o cliente respondeu?</span>
-        <textarea name="texto" rows="3" maxlength="2000" placeholder="Ex.: Disse que vai ver com o banco e retorna amanhã"></textarea>
+        <textarea name="texto" rows="3" maxlength="2000" required minlength="3" placeholder="Ex.: Disse que vai ver com o banco e retorna amanhã"></textarea>
       </label>
+      <div class="campo print-campo">
+        <span>Prova do retorno <em class="opcional">(obrigatório: print da conversa ou PDF, vai para a ocorrência)</em></span>
+        <label class="print-alvo" id="retorno-alvo" tabindex="0">
+          <input type="file" name="anexo" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
+          <img id="retorno-previa" alt="Prévia da prova" hidden>
+          <span id="retorno-dica">Clique para escolher o arquivo ou cole o print com Ctrl+V</span>
+        </label>
+      </div>
       <p class="efeito" id="retorno-efeito"></p>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="retorno-cancelar">Cancelar</button>

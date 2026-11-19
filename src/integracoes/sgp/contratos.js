@@ -88,6 +88,64 @@ function contratosSuspensos(clientes, { statusSuspenso = ['SUSPENSO'], motivos =
   return lista;
 }
 
+// Ficha do cliente para a tela da Jéssica (só o que ela precisa para cobrar):
+// documento, telefones, e-mails, plano, dia de vencimento e o comportamento de pagamento
+// das faturas do contrato nos últimos 12 meses. Nada de senha, login, Wi-Fi ou endereço.
+function fichaDoContrato(cliente, contratoId, hoje) {
+  if (!ehObjeto(cliente)) return null;
+  const id = String(contratoId);
+  const contrato = (Array.isArray(cliente.contratos) ? cliente.contratos : []).find((c) => ehObjeto(c) && texto(c.id, 40) === id);
+  if (!contrato) return null;
+  const contatos = ehObjeto(cliente.contatos) ? cliente.contatos : {};
+  const lista = (v, max) => (Array.isArray(v) ? v : []).map((x) => texto(x, max)).filter(Boolean);
+  const servicos = (Array.isArray(contrato.servicos) ? contrato.servicos : []).filter(ehObjeto);
+  const ativos = servicos.filter((s) => texto(s.status, 20).toLowerCase() === 'ativo');
+  const planos = [...new Set((ativos.length ? ativos : servicos).map((s) => (ehObjeto(s.plano) ? texto(s.plano.descricao, 120) : '')).filter(Boolean))];
+  const dias = (de, ate) => Math.round((Date.parse(ate) - Date.parse(de)) / 864e5);
+
+  // Faturas do contrato (sem as canceladas), da mais recente para a mais antiga.
+  const faturas = (Array.isArray(cliente.titulos) ? cliente.titulos : [])
+    .filter((t) => ehObjeto(t) && texto(t.clientecontrato_id, 40) === id && lerData(t.dataVencimento))
+    .map((t) => {
+      const status = texto(t.status, 20).toLowerCase();
+      const vencimento = lerData(t.dataVencimento);
+      const pagoEm = status === 'pago' ? lerData(t.dataPagamento) : null;
+      const diasAtraso = pagoEm ? Math.max(0, dias(vencimento, pagoEm)) : status === 'aberto' && vencimento < hoje ? dias(vencimento, hoje) : 0;
+      return { vencimento, valor: Number(t.valorCorrigido) || Number(t.valor) || 0, status, pagoEm, diasAtraso };
+    })
+    .filter((f) => f.status === 'pago' || f.status === 'aberto')
+    .sort((a, b) => b.vencimento.localeCompare(a.vencimento));
+
+  // Frequência: faturas que venceram nos últimos 12 meses.
+  const [a, m, d] = hoje.split('-').map(Number);
+  const umAno = new Date(Date.UTC(a - 1, m - 1, d)).toISOString().slice(0, 10);
+  const doAno = faturas.filter((f) => f.vencimento >= umAno && f.vencimento <= hoje);
+  const pagasAtrasadas = doAno.filter((f) => f.status === 'pago' && f.diasAtraso > 0);
+  const vencidas = doAno.filter((f) => f.status === 'aberto').length;
+  const proporcao = doAno.length ? (pagasAtrasadas.length + vencidas) / doAno.length : 0;
+  const nivel = !doAno.length ? 'sem-historico' : proporcao <= 0.2 ? 'raro' : proporcao <= 0.5 ? 'as-vezes' : 'frequente';
+
+  return {
+    documento: texto(cliente.cpfcnpj, 30) || null,
+    tipoPessoa: texto(cliente.tipo, 10) || null,
+    telefones: [...new Set([...lista(contatos.celulares, 30), ...lista(contatos.telefones, 30)])].slice(0, 6),
+    emails: [...new Set(lista(contatos.emails, 120))].slice(0, 4),
+    plano: planos.join(' + ') || null,
+    diaVencimento: Number(contrato.vencimento) || null,
+    formaCobranca: texto(contrato.formaCobranca, 60) || null,
+    clienteDesde: lerData(contrato.dataCadastro) || lerData(cliente.dataCadastro),
+    faturas: faturas.slice(0, 12),
+    frequencia: {
+      nivel,
+      faturas: doAno.length,
+      emDia: doAno.filter((f) => f.status === 'pago' && f.diasAtraso === 0).length,
+      pagasComAtraso: pagasAtrasadas.length,
+      emAberto: vencidas,
+      atrasoMedio: pagasAtrasadas.length ? Math.round(pagasAtrasadas.reduce((s, f) => s + f.diasAtraso, 0) / pagasAtrasadas.length) : 0,
+    },
+  };
+}
+
 // Resumo SEM dados pessoais, para entender o que o SGP devolve:
 // nomes dos campos, quantos contratos por status e os motivos de cada status.
 function diagnosticar(clientes) {
@@ -129,4 +187,4 @@ function diagnosticar(clientes) {
   };
 }
 
-module.exports = { contratosSuspensos, diagnosticar, lerData };
+module.exports = { contratosSuspensos, diagnosticar, lerData, fichaDoContrato };

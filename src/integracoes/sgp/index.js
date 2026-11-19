@@ -6,7 +6,7 @@
 // SGP_MODO=api      -> SGP real, pela rota URA de clientes
 const { criarFonteExemplo } = require('./exemplo');
 const { criarApiSgp } = require('./api');
-const { contratosSuspensos, lerData } = require('./contratos');
+const { contratosSuspensos, lerData, fichaDoContrato } = require('./contratos');
 const { criarApiOcorrencias, abertasPorContrato } = require('./ocorrencias');
 
 // Nome do tipo de ocorrência que origina o fluxo pós-cancelamento ("Financeiro - Negativação pós Cancelamento").
@@ -39,7 +39,25 @@ async function lerDatasDeSuspensao(config, buscar) {
 
 function criarFonteApi(config, opcoesApi = {}) {
   const api = criarApiSgp({ url: config.sgp.uraClientesUrl, app: config.sgp.app, token: config.sgp.token, ...opcoesApi });
+  // Última lista de clientes lida nesta rodada (as fichas reaproveitam, sem ler o SGP de novo).
+  let ultimaLeitura = null;
   return {
+    // Ficha (CPF, contatos, plano, faturas, frequência) de cada contrato pedido: Map contrato -> ficha.
+    async listarFichas(contratos, hoje) {
+      const clientes = ultimaLeitura || (await api.lerTodosClientes()).clientes;
+      ultimaLeitura = null;
+      const quero = new Set(contratos.map(String));
+      const fichas = new Map();
+      for (const cliente of clientes) {
+        for (const c of Array.isArray(cliente && cliente.contratos) ? cliente.contratos : []) {
+          const id = c && c.id != null ? String(c.id) : '';
+          if (!quero.has(id) || fichas.has(id)) continue;
+          const ficha = fichaDoContrato(cliente, id, hoje);
+          if (ficha) fichas.set(id, ficha);
+        }
+      }
+      return fichas;
+    },
     // Ocorrência ABERTA mais recente de "Financeiro - Negativação" ou "Cancelamento por Inadiplência" de cada contrato.
     async listarOcorrenciasDoFluxoPrincipal() {
       const origem = new URL(config.sgp.uraClientesUrl).origin;
@@ -88,6 +106,7 @@ function criarFonteApi(config, opcoesApi = {}) {
         console.error(`Data de suspensão do SGP indisponível, usando a estimativa pelas faturas: ${erro.message}`);
       }
       const { clientes } = await api.lerTodosClientes();
+      ultimaLeitura = clientes;
       return contratosSuspensos(clientes, {
         statusSuspenso: config.sgp.statusSuspenso,
         motivos: config.sgp.motivos,

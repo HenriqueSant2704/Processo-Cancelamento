@@ -8,6 +8,7 @@ const { criarProcesso, concluirTarefa } = require('../cronograma/motor');
 const { RepositorioJson } = require('../processos/repositorio');
 const { adicionarDias, hojeISO, ehDiaUtil } = require('../utils/datas');
 const { iniciarServidor } = require('../web/servidor');
+const { fichasExemplo } = require('../integracoes/sgp/exemplo');
 
 const OBS_NAO = ['Cliente não atendeu as ligações.', 'Mensagem visualizada, sem resposta.', 'Prometeu pagar, mas não pagou.'];
 
@@ -97,6 +98,9 @@ function semear(arquivo, hoje) {
   repositorio.dados.ultimoId = Number(id);
   repositorio.dados.processos.push(regularizado);
 
+  // Dados fictícios do cliente (CPF, telefone, plano, faturas) para a ficha.
+  const fichas = fichasExemplo(repositorio.dados.processos.map((p) => p.cliente.contrato), hoje);
+  repositorio.dados.fichas = Object.fromEntries([...fichas].map(([c, f]) => [c, { ...f, em: hoje }]));
   repositorio.gravarArquivo();
   return repositorio.dados.processos.length;
 }

@@ -477,3 +477,31 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 /* Responder antes da data uma pergunta agendada (ex.: equipamentos devolvidos) */
 .lt-acoes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--texto-2); }
 .campo .opcional { font-style: normal; font-weight: 400; color: var(--texto-3); }
+
+/* Dados do cliente (SGP) */
+.selo.alerta { background: var(--alerta-suave); color: var(--alerta); }
+.dc-vazio { margin: 0; font-size: 12.5px; }
+.dc-atualizado { text-transform: none; letter-spacing: 0; font: 500 11px var(--mono); }
+.dc-frequencia { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 10px 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--linha); background: var(--superficie-2); font-size: 12.5px; color: var(--texto-2); }
+.dc-frequencia strong { font-size: 13px; color: var(--texto); }
+.dc-frequencia.sucesso { background: var(--sucesso-suave); border-color: transparent; }
+.dc-frequencia.sucesso strong { color: var(--sucesso); }
+.dc-frequencia.alerta { background: var(--alerta-suave); border-color: transparent; }
+.dc-frequencia.alerta strong { color: var(--alerta); }
+.dc-frequencia.perigo { background: var(--perigo-suave); border-color: transparent; }
+.dc-frequencia.perigo strong { color: var(--perigo); }
+.dc-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dc-item { min-width: 0; padding: 10px 12px; border-radius: 10px; background: var(--superficie-2); border: 1px solid var(--linha); }
+.dc-item small { display: block; font-size: 11px; color: var(--texto-3); margin-bottom: 3px; }
+.dc-valor { font-size: 13px; overflow-wrap: anywhere; }
+.dc-valor a { color: var(--texto); text-decoration: none; }
+.dc-valor a:hover { color: var(--marca-texto); text-decoration: underline; }
+.dc-lista { display: flex; flex-direction: column; gap: 3px; }
+.dc-linha { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.dc-faturas { margin-top: 10px; }
+.dc-faturas summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--texto-2); }
+.tabela-faturas { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 12.5px; }
+.tabela-faturas th { text-align: left; font-size: 11px; font-weight: 600; color: var(--texto-3); padding: 6px 8px; border-bottom: 1px solid var(--linha); }
+.tabela-faturas td { padding: 6px 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+@media (max-width: 560px) { .dc-grade { grid-template-columns: minmax(0, 1fr); } .tabela-faturas td { white-space: normal; } }
+.dc-valor a.link-mini { color: var(--marca-texto); }

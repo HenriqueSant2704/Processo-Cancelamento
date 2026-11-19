@@ -154,6 +154,15 @@ async function vincularOcorrencias({ sgp, repositorio }) {
   return ligados;
 }
 
+// Dados do cliente (CPF, contatos, plano, faturas) para os contratos com processo ativo.
+async function atualizarFichas({ sgp, repositorio, hoje }) {
+  const contratos = [...new Set((await repositorio.listar()).filter((p) => p.status === 'ativo').map((p) => String(p.cliente.contrato)))];
+  if (!contratos.length) return 0;
+  const fichas = await sgp.listarFichas(contratos, hoje);
+  await repositorio.salvarFichas(fichas, hoje);
+  return fichas.size;
+}
+
 // Pós-cancelamento + suspensos numa rodada só. As duas partes são independentes:
 // se uma falhar (ex.: SGP lento), a outra ainda é gravada; o erro é repassado no fim.
 async function sincronizarTudo(args) {
@@ -184,6 +193,13 @@ async function sincronizarTudo(args) {
       await vincularOcorrencias(args);
     } catch (erro) {
       erros.push(`ocorrências: ${erro.message}`);
+    }
+  }
+  if (typeof args.sgp.listarFichas === 'function') {
+    try {
+      await atualizarFichas(args);
+    } catch (erro) {
+      erros.push(`dados dos clientes: ${erro.message}`);
     }
   }
   try {
@@ -246,4 +262,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

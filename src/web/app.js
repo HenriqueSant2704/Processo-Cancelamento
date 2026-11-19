@@ -122,6 +122,11 @@ function criarApp(opcoes) {
   const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '', supervisorSgp = '', nomes = {} } = opcoes;
   // Nome de quem é marcado, para a saudação do comentário (ex.: { admin: 'Lucas', jessica_rasteiro: 'Jéssica' }).
   const nomeDe = (username) => nomes[username] || '';
+  // Detalhe do processo para a ficha, com os dados do cliente vindos do SGP (se já sincronizados).
+  const detalhe = async (processo, dia) => {
+    const dados = typeof repositorio.obterFicha === 'function' ? await repositorio.obterFicha(processo.cliente.contrato) : null;
+    return { ...visao.detalheProcesso(processo, dia, cronograma), dadosCliente: dados };
+  };
   // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
   // Os comentários de um mesmo processo saem em ordem (fim de etapa antes do início da próxima).
   let fila = Promise.resolve();
@@ -222,7 +227,7 @@ function criarApp(opcoes) {
             data: hojeISO(),
             criar: (dados) => criarOcorrenciaSgp({ ...dados, usuarioSgp: usuario && usuario.sgpLogin ? usuario.sgpLogin : null, por: usuario ? usuario.nome : corpo.por }),
           });
-          return responderJson(res, 200, { protocolo, aviso, detalhe: visao.detalheProcesso(processo, hojeISO(), cronograma) });
+          return responderJson(res, 200, { protocolo, aviso, detalhe: await detalhe(processo, hojeISO()) });
         } catch (erro) {
           console.error(`Criar ocorrência (tarefa ${m[1]}): ${erro.message}`);
           throw new ErroHttp(400, erro.message);
@@ -271,7 +276,7 @@ function criarApp(opcoes) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
         }
-        return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
+        return responderJson(res, 200, await detalhe(processo, hoje));
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/promessa$/))) {
         const corpo = await lerCorpo(req);
@@ -291,7 +296,7 @@ function criarApp(opcoes) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
         }
-        return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
+        return responderJson(res, 200, await detalhe(processo, hoje));
       }
       if (req.method === 'GET' && url.pathname === '/api/processos') {
         return responderJson(res, 200, { hoje, fases: cronograma.fases, etapas: visao.mapaEtapas(cronograma), processos: visao.listaProcessos(await repositorio.listar(), hoje, cronograma) });
@@ -299,7 +304,7 @@ function criarApp(opcoes) {
       if (req.method === 'GET' && (m = url.pathname.match(/^\/api\/processos\/(\d+)$/))) {
         const processo = await repositorio.obter(m[1]);
         if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
-        return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
+        return responderJson(res, 200, await detalhe(processo, hoje));
       }
       // Sincronizar só dispara, em segundo plano (a leitura do SGP pode levar minutos);
       // a tela acompanha pelo GET /api/sincronizacao.
@@ -335,7 +340,7 @@ function criarApp(opcoes) {
               ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
               : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
           }
-          return responderJson(res, 200, visao.detalheProcesso(processo, hoje, cronograma));
+          return responderJson(res, 200, await detalhe(processo, hoje));
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           if (erro.status) throw erro;

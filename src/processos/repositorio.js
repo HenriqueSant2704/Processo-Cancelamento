@@ -58,6 +58,17 @@ class RepositorioJson {
     if (p) { p.bloqueadoEm = data; this.gravarArquivo(); }
   }
 
+  // Fichas dos clientes (dados do SGP), por contrato.
+  async salvarFichas(fichas, em) {
+    this.dados.fichas = this.dados.fichas || {};
+    for (const [contrato, dados] of fichas) this.dados.fichas[contrato] = { ...dados, em };
+    this.gravarArquivo();
+  }
+
+  async obterFicha(contrato) {
+    return (this.dados.fichas || {})[String(contrato)] || null;
+  }
+
   async atualizarFinanceiro(processoId, financeiro) {
     const p = await this.obter(processoId);
     if (p) { p.financeiro = financeiro; this.gravarArquivo(); }

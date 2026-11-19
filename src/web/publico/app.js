@@ -360,6 +360,68 @@
       acoes);
   }
 
+  // ---------- Dados do cliente (vindos do SGP) ----------
+  const dataNum = (iso) => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${a.slice(2)}`; };
+  const soDigitos = (t) => String(t).replace(/\D/g, '');
+  const FREQUENCIA = {
+    raro: ['Costuma pagar em dia', 'sucesso'],
+    'as-vezes': ['Atrasa às vezes', 'alerta'],
+    frequente: ['Atrasa com frequência', 'perigo'],
+    'sem-historico': ['Sem histórico no último ano', ''],
+  };
+
+  function copiar(texto, rotulo) {
+    navigator.clipboard.writeText(texto).then(() => avisar(`${rotulo} copiado`), () => avisar('Não foi possível copiar', 'erro'));
+  }
+
+  function situacaoFatura(f) {
+    if (f.status === 'aberto') return el('span', { class: `selo ${f.diasAtraso > 0 ? 'perigo' : ''}` }, f.diasAtraso > 0 ? `Em aberto · ${plural(f.diasAtraso, 'dia', 'dias')}` : 'A vencer');
+    if (f.diasAtraso > 0) return el('span', { class: 'selo alerta' }, `Paga ${dataNum(f.pagoEm)} · ${plural(f.diasAtraso, 'dia', 'dias')} de atraso`);
+    return el('span', { class: 'selo sucesso' }, f.pagoEm ? `Paga em dia · ${dataNum(f.pagoEm)}` : 'Paga');
+  }
+
+  function blocoCliente(dc) {
+    if (!dc) {
+      return el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Dados do cliente')),
+        el('p', { class: 'suave dc-vazio' }, 'Os dados do SGP (CPF, telefones, plano e faturas) aparecem depois da próxima sincronização.'));
+    }
+    const fq = dc.frequencia || {};
+    const [rotulo, cor] = FREQUENCIA[fq.nivel] || FREQUENCIA['sem-historico'];
+    const resumoFq = fq.faturas
+      ? `Nos últimos 12 meses, ${plural(fq.faturas, 'fatura', 'faturas')}: ` + [`${fq.emDia} paga${fq.emDia === 1 ? '' : 's'} em dia`, fq.pagasComAtraso ? `${fq.pagasComAtraso} com atraso (média de ${plural(fq.atrasoMedio, 'dia', 'dias')})` : null, fq.emAberto ? `${fq.emAberto} em aberto` : null].filter(Boolean).join(' · ')
+      : 'Nenhuma fatura vencida nos últimos 12 meses.';
+    const item = (rotuloItem, ...conteudo) => el('div', { class: 'dc-item' }, el('small', {}, rotuloItem), el('div', { class: 'dc-valor' }, ...conteudo));
+    const botaoCopiar = (texto, nome) => el('button', { class: 'link-mini', title: `Copiar ${nome}`, onclick: () => copiar(texto, nome) }, 'copiar');
+
+    return el('section', { class: 'dados-cliente' },
+      el('div', { class: 'secao-titulo' }, el('span', {}, 'Dados do cliente'), dc.em ? el('span', { class: 'dc-atualizado' }, `SGP · ${dataNum(dc.em)}`) : null),
+      el('div', { class: `dc-frequencia ${cor}` }, el('strong', {}, rotulo), el('span', {}, resumoFq)),
+      el('div', { class: 'dc-grade' },
+        item(dc.tipoPessoa === 'J' ? 'CNPJ' : 'CPF', dc.documento ? el('span', { class: 'dc-linha' }, el('span', { class: 'mono' }, dc.documento), botaoCopiar(dc.documento, dc.tipoPessoa === 'J' ? 'CNPJ' : 'CPF')) : '—'),
+        item('Plano', dc.plano || '—'),
+        item('Telefones', dc.telefones && dc.telefones.length
+          ? el('div', { class: 'dc-lista' }, dc.telefones.map((t) => {
+              const n = soDigitos(t);
+              const zap = n.length >= 10 && n.length <= 11 ? `55${n}` : n.length >= 12 ? n : '';
+              return el('span', { class: 'dc-linha' }, el('a', { class: 'mono', href: `tel:${n}` }, t),
+                zap ? el('a', { class: 'link-mini', href: `https://wa.me/${zap}`, target: '_blank', rel: 'noopener noreferrer' }, 'WhatsApp') : null,
+                botaoCopiar(t, 'Telefone'));
+            }))
+          : '—'),
+        item('E-mail', dc.emails && dc.emails.length
+          ? el('div', { class: 'dc-lista' }, dc.emails.map((m) => el('span', { class: 'dc-linha' }, el('a', { href: `mailto:${m}` }, m), botaoCopiar(m, 'E-mail'))))
+          : '—'),
+        item('Vencimento', dc.diaVencimento ? `Todo dia ${dc.diaVencimento}` : '—', dc.formaCobranca ? el('span', { class: 'suave' }, ` · ${dc.formaCobranca}`) : null),
+        item('Cliente desde', dc.clienteDesde ? dataNum(dc.clienteDesde) : '—')),
+      dc.faturas && dc.faturas.length
+        ? el('details', { class: 'dc-faturas' },
+            el('summary', {}, `Últimas faturas · ${dc.faturas.length}`),
+            el('table', { class: 'tabela-faturas' },
+              el('thead', {}, el('tr', {}, el('th', {}, 'Vencimento'), el('th', {}, 'Valor'), el('th', {}, 'Situação'))),
+              el('tbody', {}, dc.faturas.map((f) => el('tr', {}, el('td', { class: 'mono' }, dataNum(f.vencimento)), el('td', { class: 'mono' }, dinheiro(f.valor)), el('td', {}, situacaoFatura(f)))))))
+        : null);
+  }
+
   function desenharFicha(d) {
     const fim = d.status !== 'ativo';
     const simples = d.paraHoje.filter((t) => t.tipo !== 'decisao');
@@ -417,6 +479,7 @@
             el('strong', {}, d.financeiro ? dinheiro(d.financeiro.valorAberto || 0) : '—', d.financeiro ? el('span', {}, plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')) : null)),
           el('div', { class: 'numero' }, el('small', {}, 'Etapa'), el('strong', {}, fim ? '—' : `${d.faseIndice + 1}/${d.fases.length}`, el('span', {}, fim ? '' : d.etapa.fase))),
           el('div', { class: 'numero' }, el('small', {}, 'Próximo passo'), el('strong', {}, d.paraHoje.length ? 'Hoje' : proxima ? dataCurta(proxima.data) : '—'))),
+        blocoCliente(d.dadosCliente),
         el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
         d.paraHoje.length ? el('section', {},
           el('div', { class: 'secao-titulo' }, el('span', {}, `Para fazer agora · ${d.paraHoje.length}`)),

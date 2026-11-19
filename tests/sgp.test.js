@@ -289,3 +289,36 @@ test('feriado do SGP: avisos marcados no feriado vão para o próximo dia útil'
   const datasContato = (await repositorio.obter('1')).tarefas.filter((t) => t.tipo === 'contato').map((t) => t.data);
   assert.deepStrictEqual(datasContato, ['2026-11-18', '2026-11-23', '2026-11-24']);
 });
+
+test('ficha do cliente: contatos, plano e frequência de atraso, sem dados sensíveis do serviço', () => {
+  const { fichaDoContrato } = require('../src/integracoes/sgp/contratos');
+  const cliente = {
+    id: 1, nome: 'Fulano', tipo: 'F', cpfcnpj: '111.222.333-44', dataCadastro: '2020-01-01',
+    contatos: { celulares: ['(11) 98888-7777', '(11) 98888-7777'], telefones: ['(11) 3333-4444'], emails: ['f@x.com'] },
+    contratos: [{ id: 10, vencimento: 5, formaCobranca: 'Boleto', dataCadastro: '2021-03-02', servicos: [{ status: 'Ativo', plano: { descricao: 'Fibra 500' }, senha: 'nao-pode', wifi_password: 'nao-pode' }] }],
+    titulos: [
+      { clientecontrato_id: 10, status: 'aberto', dataVencimento: '2026-11-05', valor: 100, valorCorrigido: 103.5 },
+      { clientecontrato_id: 10, status: 'pago', dataVencimento: '2026-10-05', dataPagamento: '2026-10-15', valor: 100 },
+      { clientecontrato_id: 10, status: 'pago', dataVencimento: '2026-09-05', dataPagamento: '2026-09-04', valor: 100 },
+      { clientecontrato_id: 10, status: 'pago', dataVencimento: '2026-08-05', dataPagamento: '2026-08-09', valor: 100 },
+      { clientecontrato_id: 10, status: 'cancelado', dataVencimento: '2026-07-05', valor: 100 },
+      { clientecontrato_id: 99, status: 'aberto', dataVencimento: '2026-06-05', valor: 100 },
+      { clientecontrato_id: 10, status: 'pago', dataVencimento: '2025-06-05', dataPagamento: '2025-07-05', valor: 90 },
+    ],
+  };
+  const f = fichaDoContrato(cliente, '10', '2026-11-19');
+  assert.strictEqual(f.documento, '111.222.333-44');
+  assert.deepStrictEqual(f.telefones, ['(11) 98888-7777', '(11) 3333-4444']);
+  assert.deepStrictEqual(f.emails, ['f@x.com']);
+  assert.strictEqual(f.plano, 'Fibra 500');
+  assert.strictEqual(f.diaVencimento, 5);
+  assert.strictEqual(f.clienteDesde, '2021-03-02');
+  assert.deepStrictEqual(f.faturas.map((x) => [x.vencimento, x.status, x.diasAtraso]), [
+    ['2026-11-05', 'aberto', 14], ['2026-10-05', 'pago', 10], ['2026-09-05', 'pago', 0], ['2026-08-05', 'pago', 4], ['2025-06-05', 'pago', 30],
+  ]);
+  assert.strictEqual(f.faturas[0].valor, 103.5);
+  // Últimos 12 meses: 4 faturas, 1 em dia, 2 pagas com atraso (média 7), 1 em aberto -> atrasa com frequência
+  assert.deepStrictEqual(f.frequencia, { nivel: 'frequente', faturas: 4, emDia: 1, pagasComAtraso: 2, emAberto: 1, atrasoMedio: 7 });
+  assert.ok(!JSON.stringify(f).includes('nao-pode'));
+  assert.strictEqual(fichaDoContrato(cliente, '77', '2026-11-19'), null);
+});

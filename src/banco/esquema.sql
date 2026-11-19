@@ -89,3 +89,11 @@ alter table tarefas add column if not exists promessa integer;
 
 -- Aviso na ocorrência já enviado para esta tarefa (ex.: "abrir OS de retirada").
 alter table tarefas add column if not exists avisado_em date;
+
+-- Ficha do cliente vinda do SGP (CPF, contatos, plano, faturas, frequência de atraso), por contrato.
+-- Atualizada a cada sincronização; só para os contratos com processo ativo.
+create table if not exists fichas_clientes (
+  contrato_id   text primary key,
+  dados         jsonb not null,
+  atualizado_em date not null
+);

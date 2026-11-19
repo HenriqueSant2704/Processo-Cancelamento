@@ -191,3 +191,14 @@ test('mensagem própria da Jéssica substitui o texto automático no comentário
   assert.match(comentarios[0].texto, /o cliente pagou com o desconto que você autorizou/);
   assert.doesNotMatch(comentarios[0].texto, /Resultado:/);
 });
+
+test('ficha do processo traz os dados do cliente do SGP depois da sincronização', async (t) => {
+  const { chamar } = subir(t, { repositorio: new RepositorioJson(null), modoDemo: true });
+  const d = '?data=2026-11-16';
+  let status = (await chamar('/api/sincronizar' + d, {})).json;
+  while (status.emAndamento) status = (await chamar('/api/sincronizacao')).json;
+  const [primeiro] = (await chamar('/api/processos' + d)).json.processos;
+  const ficha = (await chamar(`/api/processos/${primeiro.id}${d}`)).json;
+  assert.strictEqual(ficha.dadosCliente.plano, 'Plano Exemplo 300 MB');
+  assert.strictEqual(ficha.dadosCliente.frequencia.faturas, 3);
+});

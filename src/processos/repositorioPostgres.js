@@ -115,6 +115,22 @@ class RepositorioPostgres {
     await this.banco.query('update processos set bloqueado_em = $2 where id = $1', [processoId, data]);
   }
 
+  // Fichas dos clientes (dados do SGP), por contrato.
+  async salvarFichas(fichas, em) {
+    if (!fichas.size) return;
+    await this.banco.query(
+      `insert into fichas_clientes (contrato_id, dados, atualizado_em)
+       select f.contrato, f.dados, $2::date from jsonb_to_recordset($1::jsonb) as f(contrato text, dados jsonb)
+       on conflict (contrato_id) do update set dados = excluded.dados, atualizado_em = excluded.atualizado_em`,
+      [JSON.stringify([...fichas].map(([contrato, dados]) => ({ contrato: String(contrato), dados }))), em],
+    );
+  }
+
+  async obterFicha(contrato) {
+    const { rows } = await this.banco.query('select dados, atualizado_em::text as em from fichas_clientes where contrato_id = $1', [String(contrato)]);
+    return rows.length ? { ...rows[0].dados, em: rows[0].em } : null;
+  }
+
   // Atualiza só o valor em aberto (vem do SGP a cada sincronização).
   async atualizarFinanceiro(processoId, { valorAberto, faturasAbertas, em }) {
     await this.banco.query('update processos set valor_aberto = $2, faturas_abertas = $3, financeiro_em = $4 where id = $1', [processoId, valorAberto ?? null, faturasAbertas ?? null, em]);

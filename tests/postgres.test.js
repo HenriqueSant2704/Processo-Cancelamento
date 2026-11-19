@@ -138,3 +138,12 @@ test('usuário ligado ao username do SGP aparece na sessão', async (t) => {
   assert.strictEqual((await usuarios.usuarioDaSessao(token)).sgpLogin, 'jessica_rasteiro');
   await assert.rejects(usuarios.definirSgp('jessica', 'nome com espaço'), /inválido/);
 });
+
+test('Postgres: guarda e atualiza a ficha do cliente por contrato', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  assert.strictEqual(await repo.obterFicha('C-1'), null);
+  await repo.salvarFichas(new Map([['C-1', { plano: 'A', telefones: ['1'] }], ['C-2', { plano: 'B' }]]), '2026-11-18');
+  await repo.salvarFichas(new Map([['C-1', { plano: 'C', telefones: [] }]]), '2026-11-19');
+  assert.deepStrictEqual(await repo.obterFicha('C-1'), { plano: 'C', telefones: [], em: '2026-11-19' });
+  assert.deepStrictEqual(await repo.obterFicha('C-2'), { plano: 'B', em: '2026-11-18' });
+});

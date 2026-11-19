@@ -187,3 +187,13 @@ test('repositório Postgres: prints dos avisos (anexos)', async (t) => {
   assert.strictEqual((await repo.listarAnexos('7'))[0].enviadoSgpEm, '2026-11-20');
   assert.strictEqual(await repo.obterAnexo('x'), null);
 });
+
+test('repositório Postgres: número da ocorrência criada pelo sistema fica gravado', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  const p = criarProcesso({ id: 1, cliente: { id: '9', nome: 'C', contrato: '9' }, bloqueadoEm: '2026-11-01', inicio: '2026-11-02', cronograma });
+  await repo.salvarProcesso(p);
+  const lido = await repo.obter('1');
+  lido.ocorrencia = { numero: '261119134800' };
+  await repo.salvarProcesso(lido);
+  assert.strictEqual((await repo.obter('1')).ocorrencia.numero, '261119134800');
+});

@@ -180,10 +180,11 @@ class RepositorioPostgres {
       } else {
         const r = await query(
           `update processos set status = $2, resultado = $3, etapa_atual = $4, finalizado_em = $5, autorizacao = $7,
+                  ocorrencia_numero = coalesce($8, ocorrencia_numero),
                   versao = versao + 1, atualizado_em = now()
             where id = $1 and versao = $6
            returning versao`,
-          [processo.id, processo.status, processo.resultado, processo.etapaAtual, processo.finalizadoEm || null, processo.versao, processo.autorizacao ? JSON.stringify(processo.autorizacao) : null],
+          [processo.id, processo.status, processo.resultado, processo.etapaAtual, processo.finalizadoEm || null, processo.versao, processo.autorizacao ? JSON.stringify(processo.autorizacao) : null, processo.ocorrencia?.numero ?? null],
         );
         if (!r.rows.length) throw new ErroConflito('Outra pessoa atualizou este cliente agora há pouco. Recarregue a tela e tente de novo.');
         processo.versao = r.rows[0].versao;

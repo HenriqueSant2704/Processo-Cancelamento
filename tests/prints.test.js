@@ -149,3 +149,14 @@ test('vários arquivos de uma vez: todos ficam guardados na tarefa', async (t) =
   const outro = p.tarefas.filter((x) => x.tipo === 'contato')[1];
   assert.strictEqual((await chamar(`/api/tarefas/${outro.id}/concluir?data=2026-11-16`, { por: 'Jessica', observacao: 'x', registro: true, prints: muitos })).status, 400);
 });
+
+test('usuários para marcar vêm da tela da ocorrência (inclui o admin/Lucas)', async () => {
+  const buscar = async (url, op = {}) => {
+    const cab = new Headers();
+    if (url.endsWith('/accounts/login/') && !op.method) { cab.append('set-cookie', 'csrftoken=abc; Path=/'); return new Response('', { status: 200, headers: cab }); }
+    if (url.endsWith('/accounts/login/')) { cab.append('set-cookie', 'sessionid=s1; Path=/'); return new Response(null, { status: 302, headers: cab }); }
+    return new Response('<select><option value="usuario_3">Usuário: admin</option><option value="usuario_5">Usu&aacute;rio: jessica_rasteiro</option></select>', { status: 200 });
+  };
+  const sessao = criarSessaoWeb({ origem: 'https://sgp.exemplo', usuario: 'u', senha: 's', buscar });
+  assert.deepStrictEqual([...await sessao.usuariosNotificaveis(1)], [['admin', 3], ['jessica_rasteiro', 5]]);
+});

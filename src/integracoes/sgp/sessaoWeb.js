@@ -140,7 +140,7 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
       if (r.status !== 200) { if (tentativa === 1) { logado = false; continue; } return new Map(); }
       const html = await r.text();
       const mapa = new Map();
-      for (const m of html.matchAll(/<option[^>]*value=["']usuario_(d+)["'][^>]*>s*(?:Usu[aá]rio:s*)?([^<s]+)/g)) mapa.set(m[2].toLowerCase(), Number(m[1]));
+      for (const m of html.matchAll(/<option[^>]*value=["']usuario_(\d+)["'][^>]*>\s*(?:Usu(?:[aá]|&aacute;|&#225;)rio:\s*)?([^<\s]+)/g)) mapa.set(m[2].toLowerCase(), Number(m[1]));
       return mapa;
     }
     return new Map();

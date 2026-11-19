@@ -202,3 +202,36 @@ test('ficha do processo traz os dados do cliente do SGP depois da sincronizaçã
   assert.strictEqual(ficha.dadosCliente.plano, 'Plano Exemplo 300 MB');
   assert.strictEqual(ficha.dadosCliente.frequencia.faturas, 3);
 });
+
+test('registro de tentativas no aviso e anotação livre: ficam no sistema e vão para a ocorrência sem marcar ninguém', async (t) => {
+  const { criarProcesso } = require('../src/cronograma/motor');
+  const repositorio = new RepositorioJson(null);
+  const cronograma = carregarCronograma();
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.ocorrencia = { numero: '999' };
+  await repositorio.salvarProcesso(p);
+  const comentarios = [];
+  const { chamar } = subir(t, { repositorio, modoDemo: true, responsavelSgp: 'jessica_rasteiro', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
+  const d = '?data=2026-11-16';
+  const texto = 'REGISTRO DE TENTATIVAS DE CONTATO\n\nLigação realizada às 12h28. O telefone chamou até a ligação ser encerrada.\n\nNo momento, não há disponibilidade para envio de SMS.';
+  const aviso = p.tarefas.find((x) => x.tipo === 'contato');
+  const r = await chamar(`/api/tarefas/${aviso.id}/concluir${d}`, { por: 'Jessica', observacao: texto, registro: true });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.tarefas.find((x) => x.id === aviso.id).observacao, texto); // detalhe do passo visível no sistema
+  const nota = await chamar(`/api/processos/1/registro${d}`, { por: 'Jessica', texto: 'Cliente pediu para ligar depois das 18h.' });
+  assert.strictEqual(nota.status, 200);
+  assert.ok(nota.json.historico.some((h) => h.evento === 'registro' && /18h/.test(h.detalhes)));
+  assert.strictEqual((await chamar(`/api/processos/1/registro${d}`, { por: 'Jessica', texto: '' })).status, 400);
+  await new Promise((r2) => setTimeout(r2, 20));
+  assert.strictEqual(comentarios.length, 2);
+  assert.deepStrictEqual(comentarios.map((c) => c.marcar), [[], []]);
+  assert.match(comentarios[0].texto, /Ligação realizada às 12h28/);
+  assert.match(comentarios[0].html, /12h28[^<]*<br>/); // quebras de linha preservadas
+  assert.match(comentarios[1].texto, /Registro do financeiro/);
+});
+
+test('scripts da tela não têm erro de sintaxe', () => {
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+  for (const arquivo of ['app.js', 'login.js']) execFileSync(process.execPath, ['--check', path.join(__dirname, '..', 'src', 'web', 'publico', arquivo)]);
+});

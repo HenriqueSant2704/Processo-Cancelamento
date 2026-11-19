@@ -7,6 +7,7 @@ const { ErroConflito } = require('../processos/repositorio');
 const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
 const { posicionar, registrarPromessa, obterEtapa } = require('../cronograma/motor');
+const { registrar } = require('../auditoria/historico');
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 
@@ -278,6 +279,25 @@ function criarApp(opcoes) {
         }
         return responderJson(res, 200, await detalhe(processo, hoje));
       }
+      // Anotação livre do financeiro: fica no histórico e vai para a ocorrência sem marcar ninguém.
+      if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/registro$/))) {
+        const corpo = await lerCorpo(req);
+        const processo = await repositorio.obter(m[1]);
+        if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
+        const texto = typeof corpo.texto === 'string' ? corpo.texto.trim().slice(0, 3000) : '';
+        if (texto.length < 3) throw new ErroHttp(400, 'Escreva o que quer registrar.');
+        const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
+        if (!por) throw new ErroHttp(400, 'Informe quem está registrando.');
+        registrar(processo, { data: hoje, por, evento: 'registro', detalhes: texto });
+        try {
+          await repositorio.salvarProcesso(processo);
+        } catch (erro) {
+          if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
+          throw erro;
+        }
+        comentar(processo, { tipo: 'registro', titulo: 'Registro do financeiro', texto, por, data: hoje, marcar: [] });
+        return responderJson(res, 200, await detalhe(processo, hoje));
+      }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/promessa$/))) {
         const corpo = await lerCorpo(req);
         const processo = await repositorio.obter(m[1]);
@@ -318,7 +338,10 @@ function criarApp(opcoes) {
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
         const corpo = await lerCorpo(req);
-        const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 1000) : undefined);
+        const texto = (v, max = 1000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+        // Registro de tentativas de contato (ligação, mensagem, e-mail...): fica na tarefa e vai para a
+        // ocorrência só como registro, sem marcar ninguém.
+        const registro = corpo.registro === true;
         try {
           const { processo, tarefa } = await servico.concluir({
             repositorio,
@@ -326,19 +349,22 @@ function criarApp(opcoes) {
             tarefaId: m[1],
             // Com login, o nome vem da sessão (ninguém registra em nome de outra pessoa).
             por: usuario ? usuario.nome : texto(corpo.por),
-            observacao: texto(corpo.observacao),
+            observacao: texto(corpo.observacao, registro ? 3000 : 1000),
             resposta: corpo.resposta,
             data: hoje,
           });
           const trocouEtapa = processo.etapaAtual !== tarefa.etapa;
+          const eventoTarefa = registro && tarefa.tipo !== 'decisao' && tarefa.observacao
+            ? { tipo: 'registro', titulo: `Registro: ${tarefa.descricao}`, texto: tarefa.observacao, por: tarefa.concluidaPor, data: hoje, marcar: [] }
+            : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao };
           if (trocouEtapa) {
             // Fim de etapa: comentário para o supervisor (Lucas) e, se houver, início da próxima para a Jéssica.
-            if (tarefa.tipo !== 'decisao') comentar(processo, { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
+            if (tarefa.tipo !== 'decisao') comentar(processo, eventoTarefa);
             avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : '') });
           } else {
             comentar(processo, tarefa.tipo === 'decisao'
               ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
-              : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao });
+              : eventoTarefa);
           }
           return responderJson(res, 200, await detalhe(processo, hoje));
         } catch (erro) {

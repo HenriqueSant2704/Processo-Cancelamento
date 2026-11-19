@@ -353,7 +353,7 @@
           t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
           t.tipo === 'contato' && decisaoDaEtapa(d, t) ? el('button', { class: 'botao sim pequeno-txt', title: 'O cliente pagou: encerra os avisos', onclick: () => abrirDecisao(d, decisaoDaEtapa(d, t), 'sim') }, 'Regularizou') : null,
           t.tipo === 'contato' ? el('button', { class: 'botao promessa', title: 'O cliente prometeu pagar numa data', onclick: () => abrirPromessa(d) }, ico('relogio'), 'Promessa') : null,
-          el('button', { class: 'botao feito', title: t.tipo === 'contato' ? 'Aviso enviado' : 'Feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
+          el('button', { class: 'botao feito', title: t.tipo === 'contato' ? 'Registrar como o aviso foi feito' : 'Feito', onclick: (e) => (t.tipo === 'contato' ? abrirRegistro(d, t) : concluir([t], e.currentTarget)) }, ico('check'), 'Feito'));
     return el('div', { class: `tarefa ${t.tipo}${t.atrasada ? ' atrasada' : ''}`, 'data-tarefa': t.id },
       el('span', { class: 'icone', html: ICONES[t.tipo] }),
       el('div', { class: 'tarefa-texto' }, el('strong', {}, t.descricao), quando),
@@ -424,7 +424,7 @@
 
   function desenharFicha(d) {
     const fim = d.status !== 'ativo';
-    const simples = d.paraHoje.filter((t) => t.tipo !== 'decisao');
+    const simples = d.paraHoje.filter((t) => t.tipo === 'acao');
     const proxima = d.proxima;
 
     const etapas = el('div', { class: 'etapas' }, d.fases.map((nome, k) => {
@@ -445,7 +445,9 @@
         el('span', { class: 'lt-ponto', html: t.status === 'concluida' ? ICONES.check : t.status === 'cancelada' ? ICONES.traco : '' }),
         el('div', { class: 'lt-corpo' },
           el('strong', {}, t.descricao), el('small', {}, sub),
-          t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null,
+          t.observacao && t.observacao.includes('\n') && !t.resposta
+            ? el('details', { class: 'lt-detalhe' }, el('summary', {}, 'Ver detalhes de como foi feito'), el('div', { class: 'lt-nota registro' }, t.observacao))
+            : t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null,
           // Pergunta agendada para o futuro: dá para responder antes (ex.: equipamentos já devolvidos).
           t.status === 'pendente' && t.tipo === 'decisao' && t.data > hoje() && !fim
             ? el('div', { class: 'lt-acoes' }, el('span', {}, 'Já aconteceu? Responder agora:'),
@@ -468,6 +470,7 @@
           el('div', { class: 'lc-meta' }, el('span', { class: 'mono' }, `Contrato #${d.cliente.contrato}`), '·', el('span', { class: 'mono' }, `Processo ${d.id}`),
             d.ocorrencia && d.ocorrencia.numero ? ['·', el('span', { class: 'mono', title: 'Ocorrência no SGP' }, `Ocorrência ${d.ocorrencia.numero}`)] : null)),
         situacao,
+        d.ocorrencia && d.ocorrencia.numero ? el('button', { class: 'botao fantasma pequeno', title: 'Anotação que fica aqui e vai para a ocorrência, sem marcar ninguém', onclick: () => abrirAnotacao(d) }, 'Registrar') : null,
         fim ? null : el('button', { class: 'botao fantasma pequeno', title: 'Para clientes já tratados antes do sistema', onclick: () => abrirAjuste(d) }, 'Ajustar etapa')),
       el('div', { class: 'ficha-corpo' },
         el('div', { class: 'numeros quatro' },
@@ -611,6 +614,95 @@
       await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value, mensagem: f.mensagem.value }) });
       $('#janela-promessa').close();
       avisar(`Promessa registrada para ${dataCurta(f.dataPromessa.value)}. Os avisos ficam pausados até lá.`);
+      await aposAcao();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  // ---------- Registro de tentativas de contato ----------
+  let registroAtual = null; // { d, t, editado }
+  const horaBR = (h) => (h ? h.replace(':', 'h') : '');
+  const agora = () => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; };
+
+  function montarTextoRegistro(f) {
+    const linhas = ['REGISTRO DE TENTATIVAS DE CONTATO', ''];
+    const as = (h) => (h ? ` às ${horaBR(h)}` : '');
+    const para = (v) => (v ? ` para ${v}` : '');
+    if (f.lig.checked) linhas.push(`Ligação realizada${as(f.ligHora.value)}${para(f.ligTel.value)}. ${f.ligRes.value}`, '');
+    if (f.msg.checked) linhas.push(`Mensagem encaminhada${as(f.msgHora.value)}${para(f.msgTel.value)}. ${f.msgRes.value}`, '');
+    if (f.mail.checked) linhas.push(`E-mail encaminhado${as(f.mailHora.value)}${para(f.mailEnd.value)}. ${f.mailRes.value}`, '');
+    linhas.push(f.sms.checked ? `SMS encaminhado${as(f.smsHora.value)}.` : 'No momento, não há disponibilidade para envio de SMS.', '');
+    if (f.prazo.value) {
+      const [a, m, d] = f.prazo.value.split('-');
+      linhas.push(`Prazo informado: No aviso encaminhado, foi informado que poderíamos aguardar a regularização até o dia ${d}/${m}/${a}.`);
+    }
+    return linhas.join('\n').trim();
+  }
+
+  function abrirRegistro(d, t) {
+    if (!garantirUsuario()) return;
+    const f = $('#form-registro');
+    f.reset();
+    registroAtual = { d, t, editado: false };
+    const dc = d.dadosCliente || {};
+    const opcoes = (sel, valores) => sel.replaceChildren(...(valores.length ? valores : ['']).map((v) => el('option', { value: v }, v || '(sem cadastro no SGP)')));
+    opcoes(f.ligTel, dc.telefones || []);
+    opcoes(f.msgTel, dc.telefones || []);
+    opcoes(f.mailEnd, dc.emails || []);
+    for (const k of ['ligHora', 'msgHora', 'mailHora', 'smsHora']) f[k].value = agora();
+    f.lig.checked = f.msg.checked = f.mail.checked = true;
+    $('#registro-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#registro-titulo').textContent = t.descricao;
+    f.texto.value = montarTextoRegistro(f);
+    $('#janela-registro').showModal();
+  }
+
+  function aoMudarRegistro(e) {
+    const f = e.currentTarget;
+    if (e.target === f.texto) { registroAtual.editado = true; return; }
+    if (!registroAtual.editado) f.texto.value = montarTextoRegistro(f);
+  }
+
+  async function enviarRegistro(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true }) });
+      $('#janela-registro').close();
+      avisar('Aviso registrado');
+      await aposAcao();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  // ---------- Anotação livre na ocorrência ----------
+  let anotacaoAtual = null;
+  function abrirAnotacao(d) {
+    if (!garantirUsuario()) return;
+    anotacaoAtual = d;
+    $('#form-anotacao').reset();
+    $('#anotacao-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#janela-anotacao').showModal();
+  }
+  async function enviarAnotacao(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await api(`/api/processos/${anotacaoAtual.id}/registro`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, texto: f.texto.value }) });
+      $('#janela-anotacao').close();
+      avisar('Registro salvo');
       await aposAcao();
     } catch (erro) {
       avisar(erro.message, 'erro');
@@ -898,6 +990,12 @@
     recarregar();
   });
   $('#form-promessa').addEventListener('submit', enviarPromessa);
+  $('#form-registro').addEventListener('submit', enviarRegistro);
+  $('#form-registro').addEventListener('input', aoMudarRegistro);
+  $('#form-registro').addEventListener('change', aoMudarRegistro);
+  $('#registro-cancelar').addEventListener('click', () => $('#janela-registro').close());
+  $('#form-anotacao').addEventListener('submit', enviarAnotacao);
+  $('#anotacao-cancelar').addEventListener('click', () => $('#janela-anotacao').close());
   $('#promessa-cancelar').addEventListener('click', () => $('#janela-promessa').close());
   $('#form-ocorrencia').addEventListener('submit', enviarOcorrencia);
   $('#ocorrencia-cancelar').addEventListener('click', () => $('#janela-ocorrencia').close());

@@ -174,6 +174,83 @@
     </form>
   </dialog>
 
+  <!-- Registro de tentativas de contato (ao concluir um aviso) -->
+  <dialog class="janela larga" id="janela-registro">
+    <form method="dialog" id="form-registro">
+      <span class="sobretitulo" id="registro-cliente"></span>
+      <h3 id="registro-titulo">Registro de tentativas de contato</h3>
+      <p class="texto-suave">Marque o que foi feito. O texto abaixo é montado sozinho, dá para editar antes de salvar. Ele fica no cronograma e vai para a ocorrência no SGP só como registro, sem marcar ninguém.</p>
+      <div class="tentativas">
+        <fieldset class="tentativa">
+          <label class="tent-marca"><input type="checkbox" name="lig"><span>Ligação</span></label>
+          <input type="time" name="ligHora" aria-label="Hora da ligação">
+          <select name="ligTel" aria-label="Telefone da ligação"></select>
+          <select name="ligRes" aria-label="Resultado da ligação">
+            <option>O telefone chamou até a ligação ser encerrada.</option>
+            <option>A ligação caiu na caixa postal.</option>
+            <option>O número não existe ou está fora de área.</option>
+            <option>O cliente atendeu.</option>
+          </select>
+        </fieldset>
+        <fieldset class="tentativa">
+          <label class="tent-marca"><input type="checkbox" name="msg"><span>Mensagem</span></label>
+          <input type="time" name="msgHora" aria-label="Hora da mensagem">
+          <select name="msgTel" aria-label="Telefone da mensagem"></select>
+          <select name="msgRes" aria-label="Resultado da mensagem">
+            <option>Até o presente momento, não houve retorno.</option>
+            <option>A mensagem foi visualizada, mas não houve resposta.</option>
+            <option>A mensagem não foi entregue.</option>
+            <option>O cliente respondeu.</option>
+          </select>
+        </fieldset>
+        <fieldset class="tentativa">
+          <label class="tent-marca"><input type="checkbox" name="mail"><span>E-mail</span></label>
+          <input type="time" name="mailHora" aria-label="Hora do e-mail">
+          <select name="mailEnd" aria-label="E-mail usado"></select>
+          <select name="mailRes" aria-label="Resultado do e-mail">
+            <option>Até o presente momento, não houve retorno.</option>
+            <option>O e-mail voltou (endereço inválido).</option>
+            <option>O cliente respondeu.</option>
+          </select>
+        </fieldset>
+        <fieldset class="tentativa">
+          <label class="tent-marca"><input type="checkbox" name="sms"><span>SMS enviado</span></label>
+          <input type="time" name="smsHora" aria-label="Hora do SMS">
+          <span class="texto-suave tent-nota">Sem marcar: "No momento, não há disponibilidade para envio de SMS."</span>
+        </fieldset>
+        <label class="campo tent-prazo">
+          <span>Prazo informado no aviso <em class="opcional">(opcional)</em></span>
+          <input type="date" name="prazo">
+        </label>
+      </div>
+      <label class="campo">
+        <span>Texto do registro</span>
+        <textarea name="texto" rows="9" maxlength="3000" required></textarea>
+      </label>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="registro-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Salvar e marcar como feito</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Anotação livre na ocorrência -->
+  <dialog class="janela" id="janela-anotacao">
+    <form method="dialog" id="form-anotacao">
+      <span class="sobretitulo" id="anotacao-cliente"></span>
+      <h3>Registrar na ocorrência</h3>
+      <p class="texto-suave">Fica no histórico do cliente aqui e vai para a ocorrência no SGP só como registro, sem marcar ninguém.</p>
+      <label class="campo">
+        <span>Texto</span>
+        <textarea name="texto" rows="7" maxlength="3000" required minlength="3"></textarea>
+      </label>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="anotacao-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Criar ocorrência no SGP -->
   <dialog class="janela" id="janela-ocorrencia">
     <form method="dialog" id="form-ocorrencia">

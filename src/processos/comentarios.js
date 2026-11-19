@@ -97,6 +97,9 @@ function htmlComentario(evento, { processo = null, hoje = null, nomeDestinatario
         lista ? paragrafo(`<b>O que fazer:</b><br>${lista}`) : '');
       break;
     }
+    case 'registro':
+      partes.push(paragrafo(`<b>[Têmis] ${esc(evento.titulo || 'Registro')}</b>`), cliente, paragrafo(textoComQuebras(evento.texto)));
+      break;
     case 'aviso':
       partes.push(paragrafo(`${saudacao(nomeDestinatario)}<b>[Têmis] ${esc(evento.titulo || 'Aviso')}</b>`), cliente, paragrafo(esc(evento.texto)));
       break;

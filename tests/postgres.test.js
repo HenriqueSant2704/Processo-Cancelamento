@@ -175,3 +175,15 @@ test('Postgres: guarda a autorização do supervisor', async (t) => {
   assert.strictEqual((await repo.obter(id)).autorizacao.status, 'autorizado');
   assert.strictEqual((await repo.listar())[0].autorizacao.status, 'autorizado');
 });
+
+test('repositório Postgres: prints dos avisos (anexos)', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  const dados = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const id = await repo.salvarAnexo({ processoId: '7', tarefaId: '7.2', nome: 'p.png', tipo: 'image/png', dados, em: '2026-11-19', por: 'Jessica' });
+  const lista = await repo.listarAnexos('7');
+  assert.deepStrictEqual(lista, [{ id, tarefaId: '7.2', nome: 'p.png', tipo: 'image/png', tamanho: 7, em: '2026-11-19', por: 'Jessica', enviadoSgpEm: null }]);
+  assert.ok((await repo.obterAnexo(id)).dados.equals(dados));
+  await repo.marcarAnexoEnviado(id, '2026-11-20');
+  assert.strictEqual((await repo.listarAnexos('7'))[0].enviadoSgpEm, '2026-11-20');
+  assert.strictEqual(await repo.obterAnexo('x'), null);
+});

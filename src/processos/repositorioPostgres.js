@@ -132,6 +132,32 @@ class RepositorioPostgres {
     return rows.length ? { ...rows[0].dados, em: rows[0].em } : null;
   }
 
+  // Prints dos avisos. dados: Buffer da imagem.
+  async salvarAnexo({ processoId, tarefaId, nome, tipo, dados, em, por }) {
+    const { rows } = await this.banco.query(
+      'insert into anexos (processo_id, tarefa_id, nome, tipo, tamanho, dados, criado_em, criado_por) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id',
+      [String(processoId), tarefaId || null, nome, tipo, dados.length, dados, em, por || null],
+    );
+    return String(rows[0].id);
+  }
+
+  async listarAnexos(processoId) {
+    const { rows } = await this.banco.query(
+      `select id::text as id, tarefa_id, nome, tipo, tamanho, criado_em::text as criado_em, criado_por, enviado_sgp_em::text as enviado_sgp_em
+       from anexos where processo_id = $1 order by id`, [String(processoId)]);
+    return rows.map((r) => ({ id: r.id, tarefaId: r.tarefa_id, nome: r.nome, tipo: r.tipo, tamanho: r.tamanho, em: r.criado_em, por: r.criado_por, enviadoSgpEm: r.enviado_sgp_em }));
+  }
+
+  async obterAnexo(id) {
+    if (!/^\d+$/.test(String(id))) return null;
+    const { rows } = await this.banco.query('select id::text as id, processo_id::text as processo_id, nome, tipo, dados from anexos where id = $1', [Number(id)]);
+    return rows.length ? { id: rows[0].id, processoId: rows[0].processo_id, nome: rows[0].nome, tipo: rows[0].tipo, dados: Buffer.from(rows[0].dados) } : null;
+  }
+
+  async marcarAnexoEnviado(id, em) {
+    await this.banco.query('update anexos set enviado_sgp_em = $2 where id = $1', [Number(id), em]);
+  }
+
   // Atualiza só o valor em aberto (vem do SGP a cada sincronização).
   async atualizarFinanceiro(processoId, { valorAberto, faturasAbertas, em }) {
     await this.banco.query('update processos set valor_aberto = $2, faturas_abertas = $3, financeiro_em = $4 where id = $1', [processoId, valorAberto ?? null, faturasAbertas ?? null, em]);

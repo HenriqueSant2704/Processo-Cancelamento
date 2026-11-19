@@ -31,7 +31,15 @@ function criarComentador({ origem, app, token, usuarioIntegracao, senhaIntegraca
     return sessao.comentar({ ocorrenciaId: alvo.id, texto: semMencao, html, usuariosIds: await idsDe(marcar) });
   }
 
-  return { comentar, usaLogin: Boolean(sessao) };
+  // Print na ocorrência (só pela tela do SGP, com o usuário da integração).
+  async function anexar({ numero, nome, tipo, dados, descricao, campos }) {
+    if (!sessao) throw new Error('Para anexar print na ocorrência é preciso o usuário da integração (SGP_USUARIO_INTEGRACAO).');
+    const alvo = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
+    if (!alvo || !alvo.id) throw new Error(`Ocorrência ${numero} não encontrada no SGP para anexar o print.`);
+    return sessao.anexar({ ocorrenciaId: alvo.id, nome, tipo, dados, descricao, campos });
+  }
+
+  return { comentar, anexar, usaLogin: Boolean(sessao) };
 }
 
 module.exports = { criarComentador };

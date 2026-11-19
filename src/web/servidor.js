@@ -81,6 +81,13 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log(`Comentários automáticos nas ocorrências do SGP: LIGADO (${comentador.usaLogin ? 'usuário da integração' : 'API, só ocorrências com OS'}).`);
   }
 
+  // Print do aviso anexado na ocorrência (GRAVA no SGP): SGP_ENVIAR_PRINT=sim.
+  let anexarOcorrenciaSgp = null;
+  if (!modoDemo && config.sgp.modo === 'api' && config.sgp.enviarPrint && comentador.usaLogin) {
+    anexarOcorrenciaSgp = (dados) => comentador.anexar({ ...dados, campos: config.sgp.camposAnexo });
+    console.log('Print dos avisos anexado nas ocorrências do SGP: LIGADO.');
+  }
+
   // Avisos pendentes na ocorrência (ex.: marcar quem abre a OS de retirada). Só com comentários ligados.
   async function avisosPendentes(dia) {
     if (!comentarOcorrenciaSgp) return;
@@ -136,6 +143,8 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   const app = criarApp({
     exigirAutorizacao,
     statusOcorrenciaSgp,
+    anexarOcorrenciaSgp,
+    printObrigatorio: config.printObrigatorio,
     lerAutorizacoes: exigirAutorizacao ? lerAutorizacoes : null,
     registrarAoAutorizar: (fn) => { aoAutorizar = fn; },
     aposAcao: () => avisosPendentes(hojeISO()),

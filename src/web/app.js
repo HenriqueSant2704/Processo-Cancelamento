@@ -11,6 +11,7 @@ const { registrar } = require('../auditoria/historico');
 const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo } = require('../processos/autorizacao');
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
+const { lerPrint } = require('../processos/prints');
 
 const PUBLICO = path.join(__dirname, 'publico');
 const TIPOS = {
@@ -46,7 +47,7 @@ function redirecionar(res, destino) {
   res.end();
 }
 
-function lerCorpo(req) {
+function lerCorpo(req, limite = 20_000) {
   return new Promise((resolve, reject) => {
     // Só aceita JSON: isso também impede envios disfarçados vindos de outros sites (CSRF).
     if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
@@ -57,7 +58,12 @@ function lerCorpo(req) {
     let corpo = '';
     req.on('data', (parte) => {
       corpo += parte;
-      if (corpo.length > 20_000) reject(new ErroHttp(413, 'Requisição grande demais.'));
+      if (corpo.length > limite) {
+        reject(new ErroHttp(413, 'Requisição grande demais.'));
+        corpo = '';
+        req.removeAllListeners('data');
+        req.resume();
+      }
     });
     req.on('end', () => {
       try {
@@ -121,13 +127,22 @@ function criarLimitador(maximo = 10, janelaMs = 15 * 60 * 1000) {
 //           criarOcorrenciaSgp (null = botão "Criar no SGP" desligado),
 //           comentarOcorrenciaSgp ({ numero, texto }) (null = sem comentários automáticos), responsavelSgp }
 function criarApp(opcoes) {
-  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, responsavelSgp = '', supervisorSgp = '', nomes = {} } = opcoes;
+  const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, anexarOcorrenciaSgp = null, printObrigatorio = false, responsavelSgp = '', supervisorSgp = '', nomes = {} } = opcoes;
   // Nome de quem é marcado, para a saudação do comentário (ex.: { admin: 'Lucas', jessica_rasteiro: 'Jéssica' }).
   const nomeDe = (username) => nomes[username] || '';
   // Detalhe do processo para a ficha, com os dados do cliente vindos do SGP (se já sincronizados).
   const detalhe = async (processo, dia) => {
     const dados = typeof repositorio.obterFicha === 'function' ? await repositorio.obterFicha(processo.cliente.contrato) : null;
-    return { ...visao.detalheProcesso(processo, dia, cronograma), dadosCliente: dados };
+    const anexos = typeof repositorio.listarAnexos === 'function' ? await repositorio.listarAnexos(processo.id) : [];
+    return { ...visao.detalheProcesso(processo, dia, cronograma), dadosCliente: dados, anexos };
+  };
+  // Print do aviso na ocorrência do SGP (melhor esforço, na mesma fila dos comentários).
+  const enviarPrint = (processo, anexoId, print, descricao) => {
+    if (!anexarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
+    const numero = processo.ocorrencia.numero;
+    fila = fila.then(() => anexarOcorrenciaSgp({ numero, nome: print.nome, tipo: print.tipo, dados: print.dados, descricao }))
+      .then(() => repositorio.marcarAnexoEnviado(anexoId, hojeISO()))
+      .catch((erro) => console.error(`Print na ocorrência ${numero} falhou: ${erro.message}`));
   };
   // Comentário automático na ocorrência do contrato (melhor esforço: não atrasa nem quebra a ação na tela).
   // Os comentários de um mesmo processo saem em ordem (fim de etapa antes do início da próxima).
@@ -243,7 +258,14 @@ function criarApp(opcoes) {
         return responderJson(res, 200, { ok: true }, { 'Set-Cookie': cookieSessao('', 0) });
       }
       if (req.method === 'GET' && url.pathname === '/api/eu') {
-        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null, criarOcorrencia: Boolean(criarOcorrenciaSgp) });
+        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null, criarOcorrencia: Boolean(criarOcorrenciaSgp), printObrigatorio: Boolean(printObrigatorio) });
+      }
+      // Imagem de um print guardado (só tipos de imagem conhecidos, nunca HTML).
+      if (req.method === 'GET' && (m = url.pathname.match(/^\/api\/anexos\/(\d+)$/))) {
+        const anexo = typeof repositorio.obterAnexo === 'function' ? await repositorio.obterAnexo(m[1]) : null;
+        if (!anexo || !/^image\/(png|jpeg|webp)$/.test(anexo.tipo)) throw new ErroHttp(404, 'Print não encontrado.');
+        res.writeHead(200, { ...SEGURANCA, 'Content-Type': anexo.tipo, 'Content-Length': anexo.dados.length, 'Cache-Control': 'private, max-age=86400', 'Content-Disposition': `inline; filename="${anexo.nome.replace(/"/g, '')}"` });
+        return res.end(anexo.dados);
       }
       // Cria no SGP a ocorrência da tarefa "Abrir ocorrência ... no SGP" (GRAVA no SGP).
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/ocorrencia$/))) {
@@ -399,9 +421,18 @@ function criarApp(opcoes) {
         return responderJson(res, 200, sincronizador.status());
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
-        const corpo = await lerCorpo(req);
+        const corpo = await lerCorpo(req, 6_000_000); // cabe o print do aviso (até 4 MB em base64)
         const texto = (v, max = 1000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
         if (corpo.resposta === 'nao') await conferirPendente(m[1]);
+        // Print do aviso: obrigatório para marcar um aviso (contato) como feito, quando ligado.
+        let print = null;
+        if (corpo.print) {
+          try { print = lerPrint(corpo.print); } catch (erro) { throw new ErroHttp(400, erro.message); }
+        } else if (printObrigatorio) {
+          const p = await repositorio.obterPorTarefa(m[1]);
+          const t = p && p.tarefas.find((x) => x.id === m[1]);
+          if (t && t.tipo === 'contato' && t.status === 'pendente') throw new ErroHttp(400, 'Anexe o print do aviso para marcar como feito.');
+        }
         // Registro de tentativas de contato (ligação, mensagem, e-mail...): fica na tarefa e vai para a
         // ocorrência só como registro, sem marcar ninguém.
         const registro = corpo.registro === true;
@@ -433,6 +464,10 @@ function criarApp(opcoes) {
             comentar(processo, tarefa.tipo === 'decisao'
               ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
               : eventoTarefa);
+          }
+          if (print && typeof repositorio.salvarAnexo === 'function') {
+            const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...print, em: hoje, por: tarefa.concluidaPor });
+            enviarPrint(processo, anexoId, print, `Print: ${tarefa.descricao}`);
           }
           return responderJson(res, 200, await detalhe(processo, hoje));
         } catch (erro) {

@@ -53,11 +53,16 @@ module.exports = {
     exigirAutorizacao: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_AUTORIZACAO || 'sim'),
     // Para encerrar uma etapa com "não regularizou", a ocorrência precisa estar Pendente no SGP (a Jéssica muda lá).
     exigirPendente: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_PENDENTE || 'sim'),
+    // Print do aviso enviado como anexo da ocorrência (GRAVA no SGP). Nomes dos campos do formulário de anexo do SGP.
+    enviarPrint: /^(sim|true|1)$/i.test(process.env.SGP_ENVIAR_PRINT || ''),
+    camposAnexo: { arquivo: (process.env.SGP_ANEXO_CAMPO_ARQUIVO || 'arquivo').trim(), descricao: (process.env.SGP_ANEXO_CAMPO_DESCRICAO ?? 'descricao').trim() },
     // Nomes para a saudação dos comentários: "admin=Lucas,jessica_rasteiro=Jéssica".
     nomes: Object.fromEntries((process.env.SGP_NOMES || '').split(',').map((p) => p.split('=').map((x) => x.trim())).filter(([u, n]) => u && n)),
     // Usuário próprio da integração no SGP (para comentar em ocorrência pela rota da tela).
     usuarioIntegracao: (process.env.SGP_USUARIO_INTEGRACAO || '').trim(),
     senhaIntegracao: process.env.SGP_SENHA_INTEGRACAO || '',
   },
+  // Cada aviso só pode ser marcado como feito com o print anexado (PRINT_OBRIGATORIO=nao desliga).
+  printObrigatorio: !/^(nao|não|false|0)$/i.test(process.env.PRINT_OBRIGATORIO || 'sim'),
   carregarCronograma,
 };

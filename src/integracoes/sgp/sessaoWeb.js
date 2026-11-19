@@ -76,7 +76,38 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
     throw new ErroSgp('O SGP não aceitou o comentário mesmo após entrar de novo.');
   }
 
-  return { comentar, entrar };
+  // Anexo (print) na ocorrência pela tela do SGP:
+  //   POST {origem}/admin/atendimento/ocorrencia/{id}/anexo/add/  (multipart; sucesso = 302 de volta para a ocorrência)
+  // Os nomes dos campos vêm da configuração (campos.arquivo / campos.descricao) até confirmarmos no formulário.
+  async function anexar({ ocorrenciaId, nome, tipo, dados, descricao = '', campos = {} }) {
+    const campoArquivo = campos.arquivo || 'arquivo';
+    const campoDescricao = campos.descricao || 'descricao';
+    const pagina = `${origem}/admin/atendimento/ocorrencia/${encodeURIComponent(ocorrenciaId)}/anexo/add/`;
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+      if (!logado) await entrar();
+      const form = new FormData();
+      form.append('csrfmiddlewaretoken', cookies.get('csrftoken') || '');
+      if (campoDescricao) form.append(campoDescricao, descricao);
+      form.append(campoArquivo, new Blob([dados], { type: tipo }), nome);
+      const r = await buscar(pagina, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { Cookie: cabecalhoCookie(cookies), Referer: pagina, Origin: origem, 'X-CSRFToken': cookies.get('csrftoken') || '' },
+        body: form,
+        signal: AbortSignal.timeout(tempoLimiteMs),
+      });
+      lerCookies(r, cookies);
+      const destino = String(r.headers.get('location') || '');
+      if (/password_change/.test(destino)) throw new ErroSgp('O SGP está pedindo para trocar a senha do usuário da integração. Entre no SGP com ele e troque a senha.');
+      if ((/accounts\/login/.test(destino) || r.status === 403) && tentativa === 1) { logado = false; continue; }
+      // Formulário com erro volta 200 com a própria página; sucesso redireciona para fora do /anexo/add/.
+      if (r.status === 302 && destino && !/anexo\/add/.test(destino) && !/accounts\/login/.test(destino)) return { ok: true };
+      throw new ErroSgp(`O SGP não aceitou o anexo (HTTP ${r.status}). Confira os nomes dos campos do formulário.`);
+    }
+    throw new ErroSgp('O SGP não aceitou o anexo mesmo após entrar de novo.');
+  }
+
+  return { comentar, anexar, entrar };
 }
 
 module.exports = { criarSessaoWeb };

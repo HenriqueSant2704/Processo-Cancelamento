@@ -521,6 +521,8 @@
           t.observacao && t.observacao.includes('\n') && !t.resposta
             ? el('details', { class: 'lt-detalhe' }, el('summary', {}, 'Ver detalhes de como foi feito'), el('div', { class: 'lt-nota registro' }, t.observacao))
             : t.resposta || t.observacao ? el('div', { class: 'lt-nota' }, t.resposta ? el('b', { class: t.resposta }, t.resposta === 'sim' ? 'Sim. ' : 'Não. ') : null, t.observacao || '') : null,
+          ...(d.anexos || []).filter((a) => a.tarefaId === t.id).map((a) => el('a', { class: 'lt-print', href: `/api/anexos/${a.id}`, target: '_blank', rel: 'noopener', title: a.enviadoSgpEm ? 'Print (anexado na ocorrência)' : 'Print do aviso' },
+            el('img', { src: `/api/anexos/${a.id}`, alt: 'Print do aviso', loading: 'lazy' }), el('span', {}, a.enviadoSgpEm ? 'Print · na ocorrência' : 'Print'))),
           // Pergunta agendada para o futuro: dá para responder antes (ex.: equipamentos já devolvidos).
           t.status === 'pendente' && t.tipo === 'decisao' && t.data > hoje() && !fim
             ? el('div', { class: 'lt-acoes' }, el('span', {}, 'Já aconteceu? Responder agora:'),
@@ -716,6 +718,28 @@
     return linhas.join('\n').trim();
   }
 
+  // Print do aviso: escolhido no arquivo ou colado (Ctrl+V). Vai em base64 junto com o registro.
+  let printAtual = null; // { nome, tipo, base64 }
+  function limparPrint() {
+    printAtual = null;
+    $('#print-previa').hidden = true;
+    $('#print-previa').removeAttribute('src');
+    $('#print-dica').textContent = 'Clique para escolher a imagem ou cole com Ctrl+V';
+  }
+  function usarPrint(arquivo) {
+    if (!arquivo) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(arquivo.type)) { avisar('O print precisa ser uma imagem PNG, JPG ou WEBP.', 'erro'); return; }
+    if (arquivo.size > 4 * 1024 * 1024) { avisar('O print passou de 4 MB. Recorte só a parte da conversa.', 'erro'); return; }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      printAtual = { nome: arquivo.name || 'print.png', tipo: arquivo.type, base64: String(leitor.result) };
+      $('#print-previa').src = printAtual.base64;
+      $('#print-previa').hidden = false;
+      $('#print-dica').textContent = 'Clique ou cole outro para trocar';
+    };
+    leitor.readAsDataURL(arquivo);
+  }
+
   function abrirRegistro(d, t) {
     if (!garantirUsuario()) return;
     const f = $('#form-registro');
@@ -731,6 +755,8 @@
     $('#registro-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#registro-titulo').textContent = t.descricao;
     f.texto.value = montarTextoRegistro(f);
+    limparPrint();
+    $('#print-opcional').textContent = estado.printObrigatorio ? '(obrigatório)' : '(opcional)';
     $('#janela-registro').showModal();
   }
 
@@ -744,10 +770,11 @@
     e.preventDefault();
     const f = e.currentTarget;
     if (!f.reportValidity()) return;
+    if (estado.printObrigatorio && !printAtual) { avisar('Anexe o print do aviso antes de salvar.', 'erro'); $('#print-alvo').focus(); return; }
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true }) });
+      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true, print: printAtual || undefined }) });
       $('#janela-registro').close();
       avisar('Aviso registrado');
       await aposAcao();
@@ -1067,8 +1094,14 @@
   $('#sino').addEventListener('click', (e) => { e.stopPropagation(); alternarSino(); });
   document.addEventListener('click', (e) => { if (!e.target.closest('.sino-area')) alternarSino(false); });
   $('#form-registro').addEventListener('submit', enviarRegistro);
-  $('#form-registro').addEventListener('input', aoMudarRegistro);
-  $('#form-registro').addEventListener('change', aoMudarRegistro);
+  $('#form-registro').addEventListener('input', (e) => { if (e.target.name !== 'print') aoMudarRegistro(e); });
+  $('#form-registro').print.addEventListener('change', (e) => { usarPrint(e.target.files[0]); e.target.value = ''; });
+  $('#print-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-registro').print.click(); } });
+  $('#janela-registro').addEventListener('paste', (e) => {
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'));
+    if (item) { e.preventDefault(); usarPrint(item.getAsFile()); }
+  });
+  $('#form-registro').addEventListener('change', (e) => { if (e.target.name !== 'print') aoMudarRegistro(e); });
   $('#registro-cancelar').addEventListener('click', () => $('#janela-registro').close());
   $('#form-anotacao').addEventListener('submit', enviarAnotacao);
   $('#anotacao-cancelar').addEventListener('click', () => $('#janela-anotacao').close());
@@ -1121,6 +1154,7 @@
       const eu = await api('/api/eu');
       estado.comLogin = eu.comLogin;
       estado.criarOcorrencia = Boolean(eu.criarOcorrencia);
+      estado.printObrigatorio = Boolean(eu.printObrigatorio);
       if (eu.comLogin) estado.usuario = eu.nome;
     } catch { /* segue sem login */ }
     desenharUsuario();

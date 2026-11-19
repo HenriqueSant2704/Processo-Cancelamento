@@ -69,6 +69,29 @@ class RepositorioJson {
     return (this.dados.fichas || {})[String(contrato)] || null;
   }
 
+  // Prints dos avisos (no arquivo local ficam em base64).
+  async salvarAnexo({ processoId, tarefaId, nome, tipo, dados, em, por }) {
+    this.dados.anexos = this.dados.anexos || [];
+    const id = String(this.dados.anexos.length + 1);
+    this.dados.anexos.push({ id, processoId: String(processoId), tarefaId: tarefaId || null, nome, tipo, tamanho: dados.length, base64: dados.toString('base64'), em, por: por || null, enviadoSgpEm: null });
+    this.gravarArquivo();
+    return id;
+  }
+
+  async listarAnexos(processoId) {
+    return (this.dados.anexos || []).filter((a) => a.processoId === String(processoId)).map(({ base64, ...resto }) => resto);
+  }
+
+  async obterAnexo(id) {
+    const a = (this.dados.anexos || []).find((x) => x.id === String(id));
+    return a ? { id: a.id, processoId: a.processoId, nome: a.nome, tipo: a.tipo, dados: Buffer.from(a.base64, 'base64') } : null;
+  }
+
+  async marcarAnexoEnviado(id, em) {
+    const a = (this.dados.anexos || []).find((x) => x.id === String(id));
+    if (a) { a.enviadoSgpEm = em; this.gravarArquivo(); }
+  }
+
   async atualizarFinanceiro(processoId, financeiro) {
     const p = await this.obter(processoId);
     if (p) { p.financeiro = financeiro; this.gravarArquivo(); }

@@ -80,6 +80,22 @@ function criarFonteApi(config, opcoesApi = {}) {
       const achada = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
       return achada && Array.isArray(achada.comentarios) ? achada.comentarios : [];
     },
+    // Ocorrências do processo (negativação, cancelamento e pós-cancelamento) COM os comentários, por contrato.
+    async ocorrenciasComComentarios() {
+      const origem = new URL(config.sgp.uraClientesUrl).origin;
+      const oc = criarApiOcorrencias({ origem, app: config.sgp.app, token: config.sgp.token, ...(opcoesApi.ocorrencias || {}) });
+      const sem = (t) => String(t).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+      const ids = (await oc.listarTipos()).filter((t) => /^financeiro - (negativacao|cancelamento por inadiplencia|negativacao pos cancelamento)$/.test(sem(t.descricao))).map((t) => t.id);
+      const porContrato = new Map();
+      if (!ids.length) return porContrato;
+      for (const o of await oc.listarOcorrencias({ tipo: ids })) {
+        if (!o || o.contrato == null) continue;
+        const k = String(o.contrato);
+        if (!porContrato.has(k)) porContrato.set(k, []);
+        porContrato.get(k).push({ numero: String(o.numero), tipo: String(o.tipo || ''), status_id: o.status_id, data_cadastro: o.data_cadastro, comentarios: Array.isArray(o.comentarios) ? o.comentarios : [] });
+      }
+      return porContrato;
+    },
     // Status atual da ocorrência (0 Aberta, 1 Encerrada, 2 Em execução, 3 Pendente). null = não achou.
     async statusDaOcorrencia(numero) {
       const origem = new URL(config.sgp.uraClientesUrl).origin;

@@ -174,6 +174,38 @@ async function lerAutorizacoes({ sgp, repositorio, cronograma, hoje, supervisor,
   return mudaram;
 }
 
+// Posiciona cada cliente no passo em que a Jéssica realmente parou, lendo os comentários das
+// ocorrências no SGP (leitorOcorrencias). Só AVANÇA, nunca volta. aplicar=false só mostra o que faria.
+async function posicionarPeloSgp({ sgp, repositorio, cronograma, hoje, aplicar = false, por = 'Têmis (leitura do SGP)' }) {
+  const { sugerir } = require('./leitorOcorrencias');
+  const { posicionar } = require('../cronograma/motor');
+  const porContrato = await sgp.ocorrenciasComComentarios();
+  const resultado = [];
+  for (const resumo of await repositorio.listar()) {
+    if (resumo.status !== 'ativo') continue;
+    const s = sugerir(resumo, porContrato.get(String(resumo.cliente.contrato)) || [], cronograma);
+    if (!s) continue;
+    const item = { id: resumo.id, cliente: resumo.cliente, etapaAtual: resumo.etapaAtual, ...s, aplicado: false };
+    if (aplicar && s.acao === 'avancar') {
+      const processo = await repositorio.obter(resumo.id);
+      try {
+        posicionar(processo, {
+          etapaId: s.etapaId, contatosFeitos: s.contatosFeitos || 0, dataReferencia: s.dataReferencia, por, data: hoje,
+          observacao: `Lido nos comentários da ocorrência no SGP: ${s.evidencias.join('; ')}`,
+        }, cronograma);
+        // A autorização pendente era da etapa anterior: o SGP já mostra que o processo andou.
+        if (processo.autorizacao && processo.autorizacao.status !== 'autorizado') processo.autorizacao = null;
+        await repositorio.salvarProcesso(processo);
+        item.aplicado = true;
+      } catch (erro) {
+        item.erro = erro.message;
+      }
+    }
+    resultado.push(item);
+  }
+  return resultado;
+}
+
 // Dados do cliente (CPF, contatos, plano, faturas) para os contratos com processo ativo.
 async function atualizarFichas({ sgp, repositorio, hoje }) {
   const contratos = [...new Set((await repositorio.listar()).filter((p) => p.status === 'ativo').map((p) => String(p.cliente.contrato)))];
@@ -282,4 +314,4 @@ async function concluir({ repositorio, cronograma, tarefaId, por, data, observac
   return { processo, tarefa };
 }
 
-module.exports = { lerAutorizacoes, atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };
+module.exports = { posicionarPeloSgp, lerAutorizacoes, atualizarFichas, atualizarFeriados, reajustarAgenda, enviarAvisosPendentes, sincronizar, sincronizarPosCancelamento, sincronizarTudo, criarOcorrenciaDaTarefa, agenda, concluir };

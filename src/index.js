@@ -13,6 +13,7 @@
 //   npm run cli -- usuario-sgp <login> <username_no_sgp>   (quem aparece como autor da ocorrência no SGP)
 // SGP:
 //   npm run cli -- sgp-diagnostico   (mostra os campos que o SGP devolve, sem dados de clientes)
+//   npm run cli -- posicionar-pelo-sgp [--aplicar]   (lê os comentários das ocorrências e mostra/aplica o passo real de cada cliente)
 // Opção --data AAAA-MM-DD simula outro dia (padrão: hoje).
 const { parseArgs } = require('node:util');
 const config = require('./config');
@@ -139,6 +140,28 @@ async function executar(comando, args, values, armazenamento) {
       for (const s of d.status) console.log(`  ${s.status}: ${s.total}\n${linhas(s.motivos)}`);
       return;
     }
+    case 'posicionar-pelo-sgp': {
+      // Lê o SGP (só leitura) e mostra onde cada cliente está de verdade. Com --aplicar, avança no sistema.
+      const nomeEtapa = (id) => (cronograma.etapas.find((e) => e.id === id) || {}).nome || id || '-';
+      console.log('Lendo as ocorrências e os comentários no SGP...');
+      const lista = await servico.posicionarPeloSgp({ sgp: criarFonteSgp(config, hoje), repositorio, cronograma, hoje, aplicar: Boolean(values.aplicar) });
+      const grupos = { avancar: 'AVANÇAR', conferir: 'CONFERIR (não mexo sozinho)', atras: 'SISTEMA À FRENTE DO SGP (não mexo)' };
+      for (const [acao, titulo] of Object.entries(grupos)) {
+        const itens = lista.filter((x) => x.acao === acao);
+        if (!itens.length) continue;
+        console.log(`
+${titulo}: ${itens.length}`);
+        for (const x of itens) {
+          console.log(`  [${x.id}] ${x.cliente.nome} (contrato ${x.cliente.contrato}): ${nomeEtapa(x.etapaAtual)} -> ${nomeEtapa(x.etapaId)}${x.contatosFeitos ? ` (${x.contatosFeitos} aviso(s) feitos)` : ''}${x.aplicado ? '  [APLICADO]' : ''}${x.erro ? `  [ERRO: ${x.erro}]` : ''}`);
+          console.log(`      ${x.evidencias.join('; ')}${x.conferir && x.conferir.length ? ` | conferir: ${x.conferir.join('; ')}` : ''}`);
+        }
+      }
+      const n = (a) => lista.filter((x) => x.acao === a).length;
+      console.log(`
+Já no passo certo: ${n('manter')} | Sem ocorrência aberta para ler: ${n('sem-ciclo')}`);
+      if (!values.aplicar && n('avancar')) console.log('Nada foi alterado. Para aplicar: npm run cli -- posicionar-pelo-sgp --aplicar');
+      return;
+    }
     case 'migrar':
       console.log(armazenamento.tipo === 'postgres' ? 'Banco Neon atualizado.' : 'Sem DATABASE_URL: nada a migrar (usando arquivo local).');
       return;
@@ -150,7 +173,7 @@ async function executar(comando, args, values, armazenamento) {
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { data: { type: 'string' }, por: { type: 'string' }, obs: { type: 'string' }, nome: { type: 'string' } },
+    options: { data: { type: 'string' }, por: { type: 'string' }, obs: { type: 'string' }, nome: { type: 'string' }, aplicar: { type: 'boolean' } },
   });
   const [comando = 'agenda', ...args] = positionals;
   const armazenamento = await criarArmazenamento();

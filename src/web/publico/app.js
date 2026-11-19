@@ -415,7 +415,9 @@
     // Mantém a seleção; se o cliente saiu da fila, abre o próximo.
     const ordem = grupos.flatMap((g) => g.itens.map((c) => c.id));
     estado.ordemFila = ordem;
-    if (!estado.selecionado || !ordem.includes(estado.selecionado)) {
+    // Nunca troca de cliente sozinho: só abre o primeiro quando NINGUÉM está aberto na ficha.
+    // (O cliente aberto continua na ficha mesmo que saia da fila ou do filtro.)
+    if (!estado.selecionado) {
       if (ordem.length && (telaLarga.matches || innerWidth > 900)) selecionar(ordem[0]);
       else if (!ordem.length && !estado.fichaFixa) desenharFichaVazia();
     }
@@ -718,14 +720,10 @@
     const id = estado.selecionado;
     const ordemAntes = estado.ordemFila || [];
     await recarregar();
-    if (estado.vista !== 'hoje') { if (id) selecionar(id); return; }
-    const aindaNaFila = (estado.ordemFila || []).includes(id);
-    if (aindaNaFila) return selecionar(id);
-    const proximo = ordemAntes.slice(ordemAntes.indexOf(id) + 1).find((x) => estado.ordemFila.includes(x)) || estado.ordemFila[0];
-    if (proximo) {
-      avisar('Cliente em dia. Indo para o próximo.');
-      selecionar(proximo, true);
-    } else desenharFichaVazia();
+    // Depois de qualquer ação, continua no MESMO cliente (pedido do Miguel): trocar sozinho fazia a
+    // Jéssica agir no cliente errado. Ela vai para o próximo quando clicar nele na fila.
+    void ordemAntes;
+    if (id) return selecionar(id);
   }
 
   // ---------- Ajustar etapa (cliente tratado antes do sistema) ----------

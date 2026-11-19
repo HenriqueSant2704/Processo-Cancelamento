@@ -68,12 +68,12 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
       });
       try {
         const { htmlComentario } = require('../processos/comentarios');
-        const nome = config.sgp.nomes[responsavel] || '';
+        const nome = '';
         await comentador.comentar({
           numero: criada.protocolo,
           html: htmlComentario({ tipo: 'aviso', titulo: `Ocorrência aberta pelo sistema (${tipoNome})`, texto: `Esta ocorrência foi aberta pelo sistema de cobrança. Os próximos passos e as notificações ao cliente serão registrados aqui.`, por: por || 'usuário do sistema', data: new Date().toISOString().slice(0, 10) }, { nomeDestinatario: nome }),
           texto: `[Têmis] Ocorrência criada pelo sistema de cobrança por ${por || 'usuário do sistema'}.`,
-          marcar: [responsavel],
+          marcar: [], // o sistema não marca ninguém sozinho (regra do Miguel)
         });
       } catch (erro) {
         criada.aviso = `A ocorrência foi criada, mas o comentário não: ${erro.message}`;

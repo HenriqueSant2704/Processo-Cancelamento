@@ -9,9 +9,14 @@ function criarComentador({ origem, app, token, usuarioIntegracao, senhaIntegraca
   const sessao = usuarioIntegracao && senhaIntegracao ? criarSessaoWeb({ origem, usuario: usuarioIntegracao, senha: senhaIntegracao }) : null;
   let mapaUsuarios = null; // username do SGP -> ID (lido dos setores, guardado em memória)
 
-  async function idsDe(usernames) {
+  async function idsDe(usernames, ocorrenciaId) {
     const nomes = usernames.filter(Boolean);
     if (!nomes.length) return [];
+    // Lista da própria tela da ocorrência (tem todo mundo, inclusive o admin/Lucas).
+    if (sessao && ocorrenciaId && typeof sessao.usuariosNotificaveis === 'function' && (!mapaUsuarios || nomes.some((n) => !mapaUsuarios.has(String(n).toLowerCase())))) {
+      const daTela = await sessao.usuariosNotificaveis(ocorrenciaId).catch(() => new Map());
+      mapaUsuarios = new Map([...(mapaUsuarios || []), ...daTela]);
+    }
     if (!mapaUsuarios) {
       mapaUsuarios = new Map();
       const r = await getComCorpo(`${origem}/api/os/ocorrencia/setor/list/`, { app, token }, 60_000);
@@ -28,15 +33,17 @@ function criarComentador({ origem, app, token, usuarioIntegracao, senhaIntegraca
     const alvo = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
     if (!alvo || !alvo.id) throw new Error(`Ocorrência ${numero} não encontrada no SGP para comentar.`);
     const semMencao = marcar.length ? texto.replace(/\n?@[\w.-]+\s*$/g, '') : texto; // a marcação vai no campo próprio
-    return sessao.comentar({ ocorrenciaId: alvo.id, texto: semMencao, html, usuariosIds: await idsDe(marcar) });
+    return sessao.comentar({ ocorrenciaId: alvo.id, texto: semMencao, html, usuariosIds: await idsDe(marcar, alvo.id) });
   }
 
   // Print na ocorrência (só pela tela do SGP, com o usuário da integração).
-  async function anexar({ numero, nome, tipo, dados, descricao, campos }) {
+  async function anexar({ numero, arquivos, nome, tipo, dados, descricao }) {
     if (!sessao) throw new Error('Para anexar print na ocorrência é preciso o usuário da integração (SGP_USUARIO_INTEGRACAO).');
     const alvo = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
     if (!alvo || !alvo.id) throw new Error(`Ocorrência ${numero} não encontrada no SGP para anexar o print.`);
-    return sessao.anexar({ ocorrenciaId: alvo.id, nome, tipo, dados, descricao, campos });
+    const lista = Array.isArray(arquivos) && arquivos.length ? arquivos : [{ nome, tipo, dados, descricao }];
+    if (lista.some((a) => !a || !a.nome || !a.dados || !a.dados.length)) throw new Error('Arquivo vazio: nada foi enviado ao SGP.');
+    return sessao.anexar({ ocorrenciaId: alvo.id, arquivos: lista });
   }
 
   return { comentar, anexar, usaLogin: Boolean(sessao) };

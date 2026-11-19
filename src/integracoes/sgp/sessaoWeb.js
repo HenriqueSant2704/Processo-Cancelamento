@@ -130,7 +130,23 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
     throw new ErroSgp('O SGP não aceitou o anexo mesmo após entrar de novo.');
   }
 
-  return { comentar, anexar, entrar };
+  // Quem pode ser marcado ("Usuários notificados") na tela da ocorrência: Map username -> ID.
+  // É a lista completa do SGP (inclui o admin, que não aparece nos setores da API).
+  async function usuariosNotificaveis(ocorrenciaId) {
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+      if (!logado) await entrar();
+      const r = await buscar(`${origem}/admin/atendimento/ocorrencia/${encodeURIComponent(ocorrenciaId)}/edit/`, { redirect: 'manual', headers: { Cookie: cabecalhoCookie(cookies) }, signal: AbortSignal.timeout(tempoLimiteMs) });
+      lerCookies(r, cookies);
+      if (r.status !== 200) { if (tentativa === 1) { logado = false; continue; } return new Map(); }
+      const html = await r.text();
+      const mapa = new Map();
+      for (const m of html.matchAll(/<option[^>]*value=["']usuario_(d+)["'][^>]*>s*(?:Usu[aá]rio:s*)?([^<s]+)/g)) mapa.set(m[2].toLowerCase(), Number(m[1]));
+      return mapa;
+    }
+    return new Map();
+  }
+
+  return { comentar, anexar, entrar, usuariosNotificaveis };
 }
 
 module.exports = { criarSessaoWeb };

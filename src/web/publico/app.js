@@ -7,7 +7,8 @@
   const estado = {
     data: null, // só no modo demonstração (simular outro dia)
     vista: 'hoje',
-    aba: 'todos',
+    aba: 'todos', // passo escolhido no seletor (id do grupo) ou 'todos'
+    filtro: null, // filtro rápido: atrasadas | retorno | perguntar | autorizacao | autorizados
     busca: '',
     abaClientes: 'ativos',
     faseClientes: null,
@@ -64,6 +65,7 @@
     alerta: '<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>',
     relogio: '<svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/></svg>',
     sol: '<svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5 19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5 19 5M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>',
+    enviar: '<svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/></svg>',
     lua: '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>',
   };
   const ico = (nome) => el('span', { html: ICONES[nome], style: 'display:contents', 'aria-hidden': 'true' });
@@ -81,6 +83,14 @@
   const hoje = () => (estado.painel && estado.painel.hoje) || estado.data;
   const nivelDias = (d) => (d > 30 ? 'critico' : d > 15 ? 'alto' : '');
   const titulo = (nome) => String(nome).toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, e, l) => e + l.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, (p) => p.toLowerCase());
+
+  // Hora local de um instante ISO (ex.: "09:00").
+  const horaDe = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+  // Aviso enviado e esperando o cliente; "perguntar" = já passou a hora de perguntar se teve retorno.
+  const avisoEnviado = (t) => t.tipo === 'contato' && t.retorno && t.retorno.enviadoEm;
+  const perguntarRetorno = (t) => avisoEnviado(t) && new Date(t.retorno.proximaChecagem) <= new Date();
+  const esperandoRetorno = (c) => c.paraHoje.some(avisoEnviado);
+  const deveRetorno = (c) => c.paraHoje.some(perguntarRetorno);
 
   const dinheiro = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: v >= 1000 ? 0 : 2 });
 
@@ -123,19 +133,39 @@
 
   // ---------- Sino: respostas do Lucas ----------
   function desenharSino() {
-    const lista = estado.painel.notificacoes || [];
-    $('#sino-total').hidden = !lista.length;
-    $('#sino-total').textContent = String(lista.length);
-    $('#sino').classList.toggle('tem', lista.length > 0);
+    const lucas = estado.painel.notificacoes || [];
+    const retornos = (estado.painel.clientes || []).filter(deveRetorno);
+    const total = lucas.length + retornos.length;
+    $('#sino-total').hidden = !total;
+    $('#sino-total').textContent = String(total);
+    $('#sino').classList.toggle('tem', total > 0);
     $('#sino-lista').replaceChildren(
+      el('div', { class: 'sino-titulo' }, 'Teve retorno do cliente?'),
+      retornos.length
+        ? retornos.map((c) => {
+            const t = c.paraHoje.find(perguntarRetorno);
+            return el('button', { class: 'sino-item', onclick: () => abrirNotificacao({ id: c.id }) },
+              el('span', { class: 'selo-mini aut-aguardando' }, 'Perguntar agora'),
+              el('strong', {}, titulo(c.cliente.nome)),
+              el('span', { class: 'sino-texto' }, `${t.descricao} · enviado às ${horaDe(t.retorno.enviadoEm)}`));
+          })
+        : el('p', { class: 'suave sino-vazio' }, 'Nenhum aviso esperando pergunta agora.'),
       el('div', { class: 'sino-titulo' }, 'Respostas do Lucas'),
-      lista.length
-        ? lista.map((n) => el('button', { class: `sino-item aut-${n.status}`, onclick: () => abrirNotificacao(n) },
+      lucas.length
+        ? lucas.map((n) => el('button', { class: `sino-item aut-${n.status}`, onclick: () => abrirNotificacao(n) },
             el('span', { class: `selo-mini aut-${n.status}` }, n.nome),
             el('strong', {}, titulo(n.cliente)),
             n.resposta && n.resposta.texto ? el('span', { class: 'sino-texto' }, `"${n.resposta.texto.slice(0, 140)}${n.resposta.texto.length > 140 ? '…' : ''}"`) : null))
         : el('p', { class: 'suave sino-vazio' }, 'Nenhuma resposta nova.'));
+    // Aviso do navegador quando surge uma pergunta nova (só se a Jéssica permitiu).
+    const novos = retornos.map((c) => c.id).filter((id) => !(estado.jaAvisados || new Set()).has(id));
+    estado.jaAvisados = new Set(retornos.map((c) => c.id));
+    if (novos.length && estado.notificouUmaVez && 'Notification' in window && Notification.permission === 'granted') {
+      try { new Notification('Têmis · teve retorno?', { body: `${plural(novos.length, 'cliente', 'clientes')} esperando você perguntar se respondeu ao aviso.`, tag: 'temis-retorno' }); } catch { /* sem notificação */ }
+    }
+    estado.notificouUmaVez = true;
   }
+
   function alternarSino(abrir) {
     const aberto = abrir ?? $('#sino-lista').hidden;
     $('#sino-lista').hidden = !aberto;
@@ -145,10 +175,13 @@
     alternarSino(false);
     if (estado.vista !== 'hoje') trocarVista('hoje');
     estado.aba = 'todos';
+    estado.filtro = null;
     desenharHoje();
     await selecionar(n.id, true);
   }
   setInterval(() => { if (!document.hidden && estado.painel) carregarPainel().catch(() => {}); }, 120000);
+  // A cada minuto revê quem já passou da hora de perguntar "teve retorno?" (sem ir ao servidor).
+  setInterval(() => { if (estado.painel && !document.querySelector('dialog[open]')) { desenharSino(); desenharMetricas(); } }, 60000);
   async function carregarClientes() {
     const r = await api('/api/processos');
     estado.processos = r.processos;
@@ -202,11 +235,15 @@
   const nomeGrupo = (c) => (c.parado ? c.passo.nome : c.etapa ? `${c.etapa.nome}${c.passo ? ` · ${c.passo.nome}` : ''}` : 'Outros');
   const ordemGrupo = (c) => (c.parado ? [-1, { 'aut-respondido': 0, 'aut-negado': 1, 'aut-aguardando': 2 }[c.passo.id] ?? 3] : [c.faseIndice ?? 99, c.passo ? ORDEM_PASSO[c.passo.id] ?? 9 : 9]);
   const autorizadoNovo = (c) => c.autorizacao && c.autorizacao.status === 'autorizado' && !c.parado && c.paraHoje.some((t) => t.etapa === c.autorizacao.etapa);
-  const passaAba = (c) => estado.aba === 'todos'
-    || (estado.aba === 'atrasadas' ? c.paraHoje.some((t) => t.atrasada)
-      : estado.aba === 'autorizacao' ? c.parado
-        : estado.aba === 'autorizados' ? autorizadoNovo(c)
-          : chaveGrupo(c) === estado.aba);
+  const FILTROS = {
+    atrasadas: (c) => c.paraHoje.some((t) => t.atrasada),
+    retorno: esperandoRetorno,
+    perguntar: deveRetorno,
+    autorizacao: (c) => c.parado,
+    autorizados: autorizadoNovo,
+  };
+  const passaFiltro = (c) => !estado.filtro || !FILTROS[estado.filtro] || FILTROS[estado.filtro](c);
+  const passaAba = (c) => (estado.aba === 'todos' || chaveGrupo(c) === estado.aba) && passaFiltro(c);
 
   // Hoje: a fila do painel. Outro dia: a agenda daquele dia.
   const clientesBase = () => (estado.dia ? estado.agenda || [] : estado.painel.clientes);
@@ -229,38 +266,55 @@
     return [...mapa.values()].sort((a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1] || a.nome.localeCompare(b.nome));
   }
 
+  // Faixa do topo: números do dia, que também servem de filtro rápido da fila.
   function desenharMetricas() {
     const r = estado.painel.resumo;
-    const m = ({ cor, rotulo, valor, detalhe, aba }) => el(aba ? 'button' : 'div', {
-      class: `metrica${valor ? '' : ' zero'}${aba && estado.aba === aba ? ' ativa' : ''}`,
+    const base = estado.painel.clientes || [];
+    const n = (f) => base.filter(FILTROS[f]).length;
+    const item = ({ cor, rotulo, valor, detalhe, filtro }) => el(filtro ? 'button' : 'div', {
+      class: `faixa-item${valor ? '' : ' zero'}${filtro && estado.filtro === filtro ? ' ativa' : ''}`,
       style: `--cor: var(${cor})`,
-      onclick: aba ? () => trocarAba(estado.aba === aba ? 'todos' : aba) : null,
-    }, el('span', { class: 'metrica-rotulo' }, el('i'), rotulo), el('span', { class: 'metrica-valor' }, String(valor)), el('span', { class: 'metrica-detalhe' }, detalhe));
+      title: filtro ? (estado.filtro === filtro ? 'Tirar o filtro' : `Mostrar só: ${rotulo.toLowerCase()}`) : null,
+      onclick: filtro ? () => trocarFiltro(estado.filtro === filtro ? null : filtro) : null,
+    }, el('i'), el('span', { class: 'faixa-rotulo' }, rotulo), el('b', {}, String(valor)), detalhe ? el('small', {}, detalhe) : null);
     $('#metricas').replaceChildren(
-      m({ cor: '--marca', rotulo: 'Para hoje', valor: r.paraHoje, detalhe: plural(r.clientesHoje, 'cliente', 'clientes') }),
-      m({ cor: '--perigo', rotulo: 'Atrasadas', valor: r.atrasadas, detalhe: r.atrasadas ? 'de dias anteriores' : 'tudo em dia', aba: 'atrasadas' }),
-      m({ cor: '--alerta', rotulo: 'Aguardando autorização', valor: r.aguardandoAutorizacao || 0, detalhe: 'esperando o Lucas', aba: r.aguardandoAutorizacao ? 'autorizacao' : null }),
-      m({ cor: '--sucesso', rotulo: 'Autorizados', valor: r.autorizados || 0, detalhe: 'prontos para seguir', aba: r.autorizados ? 'autorizados' : null }),
+      item({ cor: '--marca', rotulo: 'Para hoje', valor: r.paraHoje, detalhe: plural(r.clientesHoje, 'cliente', 'clientes') }),
+      item({ cor: '--perigo', rotulo: 'Atrasadas', valor: r.atrasadas, filtro: 'atrasadas' }),
+      item({ cor: '--alerta', rotulo: 'Perguntar retorno', valor: n('perguntar'), filtro: 'perguntar' }),
+      item({ cor: '--contato', rotulo: 'Aguardando retorno', valor: n('retorno'), filtro: 'retorno' }),
+      item({ cor: '--decisao', rotulo: 'Esperando o Lucas', valor: r.aguardandoAutorizacao || 0, filtro: 'autorizacao' }),
+      item({ cor: '--sucesso', rotulo: 'Autorizados', valor: r.autorizados || 0, filtro: 'autorizados' }),
     );
   }
 
+  // Seletor de passo + filtros rápidos (atrasados, retorno).
   function desenharAbas() {
     const base = clientesBase();
-    const atrasados = base.filter((c) => c.paraHoje.some((t) => t.atrasada)).length;
-    const aba = (id, nome, n, cor) => el('button', {
-      class: `aba${estado.aba === id ? ' ativa' : ''}`, role: 'tab', 'aria-selected': String(estado.aba === id), onclick: () => trocarAba(id), title: nome,
-    }, cor ? el('i', { style: `background:${cor}` }) : null, nome, el('b', {}, String(n)));
-    $('#abas').replaceChildren(
-      aba('todos', 'Todos', base.length),
-      atrasados ? aba('atrasadas', 'Atrasados', atrasados, 'var(--perigo)') : null,
-      ...gruposDaFila(base).map((g) => aba(g.id, g.nome, g.itens.length)),
-    );
-    // Se o grupo escolhido sumiu (ex.: terminou), volta para "Todos".
-    if (!['todos', 'atrasadas', 'autorizacao', 'autorizados'].includes(estado.aba) && !gruposDaFila(base).some((g) => g.id === estado.aba)) estado.aba = 'todos';
+    const grupos = gruposDaFila(base);
+    // Se o passo escolhido sumiu (ex.: terminou), volta para "Todos".
+    if (estado.aba !== 'todos' && !grupos.some((g) => g.id === estado.aba)) estado.aba = 'todos';
+    $('#filtro-passo').replaceChildren(
+      el('option', { value: 'todos' }, `Todos os passos (${base.length})`),
+      ...grupos.map((g) => el('option', { value: g.id }, `${g.nome} (${g.itens.length})`)));
+    $('#filtro-passo').value = estado.aba;
+    const chip = (id, nome, cor) => {
+      const qtd = base.filter(FILTROS[id]).length;
+      if (!qtd && estado.filtro !== id) return null;
+      return el('button', { class: `aba${estado.filtro === id ? ' ativa' : ''}`, 'aria-pressed': String(estado.filtro === id), onclick: () => trocarFiltro(estado.filtro === id ? null : id) },
+        el('i', { style: `background:${cor}` }), nome, el('b', {}, String(qtd)));
+    };
+    $('#abas').replaceChildren(...[
+      chip('atrasadas', 'Atrasados', 'var(--perigo)'),
+      chip('perguntar', 'Perguntar retorno', 'var(--alerta)'),
+      chip('retorno', 'Aguardando retorno', 'var(--contato)')].filter(Boolean));
   }
 
   function trocarAba(id) {
     estado.aba = id;
+    desenharHoje();
+  }
+  function trocarFiltro(id) {
+    estado.filtro = id;
     desenharHoje();
   }
 
@@ -278,7 +332,9 @@
       el('span', { class: 'lc-meta' },
         el('span', { class: 'pontos', title: plural(c.paraHoje.length, 'tarefa no dia', 'tarefas no dia') },
           c.paraHoje.map((t) => el('i', { class: t.atrasada ? 'p-atrasada' : `p-${t.tipo}` }))),
-        el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', c.parado ? el('span', { class: `selo-mini aut-${c.autorizacao.status}` }, c.passo.nome) : etapaTxt)),
+        el('span', { class: 'mono' }, `#${c.cliente.contrato}`), '·', c.parado ? el('span', { class: `selo-mini aut-${c.autorizacao.status}` }, c.passo.nome)
+          : deveRetorno(c) ? el('span', { class: 'selo-mini aut-aguardando' }, 'Teve retorno?')
+            : esperandoRetorno(c) ? el('span', { class: 'selo-mini retorno' }, 'Aguardando retorno') : etapaTxt)),
     el('span', { class: 'lc-direita' },
       chipDias(c.diasBloqueado),
       c.financeiro && c.financeiro.valorAberto ? el('span', { class: 'mono valor', title: 'Em aberto no SGP' }, dinheiro(c.financeiro.valorAberto)) : null));
@@ -314,7 +370,6 @@
 
   function desenharHoje() {
     desenharMetricas();
-    desenharFunil($('#funil'));
     desenharDias();
     desenharAbas();
     const lista = clientesVisiveis();
@@ -378,21 +433,39 @@
   }
 
   function linhaTarefa(d, t) {
-    const quando = t.atrasada
+    const enviado = avisoEnviado(t);
+    const perguntar = perguntarRetorno(t);
+    const checagens = enviado ? t.retorno.checagens || [] : [];
+    const quando = t.atrasada && !enviado
       ? el('small', { class: 'atrasada' }, `Atrasada desde ${dataCurta(t.data)} (${plural(diasEntre(t.data, hoje()), 'dia', 'dias')})`)
-      : el('small', {}, { contato: 'Contato com o cliente', acao: 'Ação no SGP', decisao: 'Responda para o processo seguir' }[t.tipo]);
-    const acoes = t.tipo === 'decisao'
-      ? el('div', { class: 'acoes-tarefa' },
-          el('button', { class: 'botao sim', onclick: () => abrirDecisao(d, t, 'sim') }, ico('check'), 'Sim'),
-          el('button', { class: 'botao nao', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'))
-      : el('div', { class: 'acoes-tarefa' },
-          t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
-          t.tipo === 'contato' && decisaoDaEtapa(d, t) ? el('button', { class: 'botao sim pequeno-txt', title: 'O cliente pagou: encerra os avisos', onclick: () => abrirDecisao(d, decisaoDaEtapa(d, t), 'sim') }, 'Regularizou') : null,
-          t.tipo === 'contato' ? el('button', { class: 'botao promessa', title: 'O cliente prometeu pagar numa data', onclick: () => abrirPromessa(d) }, ico('relogio'), 'Promessa') : null,
-          el('button', { class: 'botao feito', title: t.tipo === 'contato' ? 'Registrar como o aviso foi feito' : 'Feito', onclick: (e) => (t.tipo === 'contato' ? abrirRegistro(d, t) : concluir([t], e.currentTarget)) }, ico('check'), 'Feito'));
-    return el('div', { class: `tarefa ${t.tipo}${t.atrasada ? ' atrasada' : ''}`, 'data-tarefa': t.id },
-      el('span', { class: 'icone', html: ICONES[t.tipo] }),
-      el('div', { class: 'tarefa-texto' }, el('strong', {}, t.descricao), quando),
+      : enviado
+        ? el('small', { class: perguntar ? 'perguntar' : '' }, `Enviado às ${horaDe(t.retorno.enviadoEm)}${t.retorno.enviadoPor ? ` por ${t.retorno.enviadoPor}` : ''} · `, perguntar ? el('b', {}, 'hora de perguntar: teve retorno?') : `nova pergunta às ${horaDe(t.retorno.proximaChecagem)}`)
+        : el('small', {}, { contato: 'Envie o aviso e marque "Enviei"', acao: 'Ação no SGP', decisao: 'Responda para o processo seguir' }[t.tipo]);
+    let acoes;
+    if (t.tipo === 'decisao') {
+      acoes = el('div', { class: 'acoes-tarefa' },
+        el('button', { class: 'botao sim', onclick: () => abrirDecisao(d, t, 'sim') }, ico('check'), 'Sim'),
+        el('button', { class: 'botao nao', onclick: () => abrirDecisao(d, t, 'nao') }, ico('x'), 'Não'));
+    } else if (t.tipo === 'contato' && !enviado) {
+      acoes = el('div', { class: 'acoes-tarefa' },
+        decisaoDaEtapa(d, t) ? el('button', { class: 'botao sim pequeno-txt', title: 'O cliente pagou: encerra os avisos', onclick: () => abrirDecisao(d, decisaoDaEtapa(d, t), 'sim') }, 'Regularizou') : null,
+        el('button', { class: 'botao promessa', title: 'O cliente prometeu pagar numa data', onclick: () => abrirPromessa(d) }, ico('relogio'), 'Promessa'),
+        el('button', { class: 'botao primario', title: 'Marca que o aviso foi enviado agora. Depois o sistema pergunta se o cliente respondeu.', onclick: (e) => marcarEnviado(d, t, e.currentTarget) }, ico('enviar'), 'Enviei'));
+    } else if (t.tipo === 'contato') {
+      acoes = el('div', { class: 'acoes-tarefa' },
+        el('button', { class: 'botao sim', title: 'O cliente respondeu: regularizou, prometeu ou disse outra coisa', onclick: () => abrirRetorno(d, t) }, ico('contato'), 'Teve retorno'),
+        el('button', { class: 'botao fantasma borda', title: 'Pergunta de novo mais tarde', onclick: (e) => semRetorno(d, t, e.currentTarget) }, ico('relogio'), 'Sem retorno'),
+        el('button', { class: 'botao feito', title: 'Encerra este aviso: registra as tentativas de contato e o print', onclick: () => abrirRegistro(d, t) }, ico('check'), 'Finalizar aviso'));
+    } else {
+      acoes = el('div', { class: 'acoes-tarefa' },
+        t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
+        el('button', { class: 'botao feito', title: 'Feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
+    }
+    return el('div', { class: `tarefa ${t.tipo}${t.atrasada && !enviado ? ' atrasada' : ''}${enviado ? ' enviado' : ''}${perguntar ? ' perguntar' : ''}`, 'data-tarefa': t.id },
+      el('span', { class: 'icone', html: ICONES[enviado ? 'relogio' : t.tipo] }),
+      el('div', { class: 'tarefa-texto' }, el('strong', {}, t.descricao), quando,
+        checagens.length ? el('ul', { class: 'checagens' }, checagens.map((c) => el('li', { class: c.resultado },
+          el('time', {}, horaDe(c.em)), c.resultado === 'retorno' ? c.texto : 'Sem retorno'))) : null),
       acoes);
   }
 
@@ -500,7 +573,7 @@
     const simples = d.paraHoje.filter((t) => t.tipo === 'acao');
     const proxima = d.proxima;
 
-    const etapas = el('div', { class: 'etapas' }, d.fases.map((nome, k) => {
+    const etapas = el('div', { class: 'etapas', style: `--n:${d.fases.length}` }, d.fases.map((nome, k) => {
       const classe = fim ? (d.resultado === 'cancelado' ? 'feita' : '') : k < d.faseIndice ? 'feita' : k === d.faseIndice ? 'atual' : '';
       return el('div', { class: `etapa ${classe}` }, el('i'), el('span', { title: nome }, nome));
     }));
@@ -536,6 +609,16 @@
       ? el('span', { class: `selo ${d.resultado === 'regularizado' ? 'sucesso' : 'perigo'}` }, d.resultado === 'regularizado' ? 'Regularizado' : 'Cancelado')
       : el('span', { class: 'selo marca' }, d.etapa.nome);
 
+    const numeros = el('div', { class: 'numeros quatro' },
+      el('div', { class: `numero ${fim ? '' : nivelDias(d.diasBloqueado)}` },
+        el('small', {}, fim ? 'Finalizado em' : d.fluxo === 'pos-cancelamento' ? 'Ocorrência aberta há' : 'Suspenso há'),
+        fim ? el('strong', {}, dataCurta(d.finalizadoEm)) : el('strong', {}, String(d.diasBloqueado), el('span', {}, d.diasBloqueado === 1 ? 'dia' : 'dias'))),
+      el('div', { class: 'numero', title: d.financeiro ? `Atualizado em ${dataCurta(d.financeiro.em)}` : 'Ainda sem informação do SGP' },
+        el('small', {}, 'Em aberto'),
+        el('strong', {}, d.financeiro ? dinheiro(d.financeiro.valorAberto || 0) : '—', d.financeiro ? el('span', {}, plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')) : null)),
+      el('div', { class: 'numero' }, el('small', {}, 'Etapa'), el('strong', {}, fim ? '—' : `${d.faseIndice + 1}/${d.fases.length}`, el('span', {}, fim ? '' : d.etapa.fase))),
+      el('div', { class: 'numero' }, el('small', {}, 'Próximo passo'), el('strong', {}, d.paraHoje.length ? 'Hoje' : proxima ? dataCurta(proxima.data) : '—')));
+
     $('#ficha').replaceChildren(
       el('div', { class: 'ficha-cabeca' },
         el('button', { class: 'voltar', 'aria-label': 'Voltar para a fila', onclick: fecharFicha, html: ICONES.voltar }),
@@ -548,30 +631,25 @@
         d.ocorrencia && d.ocorrencia.numero ? el('button', { class: 'botao fantasma pequeno', title: 'Anotação que fica aqui e vai para a ocorrência, sem marcar ninguém', onclick: () => abrirAnotacao(d) }, 'Registrar') : null,
         fim ? null : el('button', { class: 'botao fantasma pequeno', title: 'Para clientes já tratados antes do sistema', onclick: () => abrirAjuste(d) }, 'Ajustar etapa')),
       el('div', { class: 'ficha-corpo' },
-        el('div', { class: 'numeros quatro' },
-          el('div', { class: `numero ${fim ? '' : nivelDias(d.diasBloqueado)}` },
-            el('small', {}, fim ? 'Finalizado em' : d.fluxo === 'pos-cancelamento' ? 'Ocorrência aberta há' : 'Suspenso há'),
-            fim ? el('strong', {}, dataCurta(d.finalizadoEm)) : el('strong', {}, String(d.diasBloqueado), el('span', {}, d.diasBloqueado === 1 ? 'dia' : 'dias'))),
-          el('div', { class: 'numero', title: d.financeiro ? `Atualizado em ${dataCurta(d.financeiro.em)}` : 'Ainda sem informação do SGP' },
-            el('small', {}, 'Em aberto'),
-            el('strong', {}, d.financeiro ? dinheiro(d.financeiro.valorAberto || 0) : '—', d.financeiro ? el('span', {}, plural(d.financeiro.faturasAbertas || 0, 'fatura', 'faturas')) : null)),
-          el('div', { class: 'numero' }, el('small', {}, 'Etapa'), el('strong', {}, fim ? '—' : `${d.faseIndice + 1}/${d.fases.length}`, el('span', {}, fim ? '' : d.etapa.fase))),
-          el('div', { class: 'numero' }, el('small', {}, 'Próximo passo'), el('strong', {}, d.paraHoje.length ? 'Hoje' : proxima ? dataCurta(proxima.data) : '—'))),
-        cartaoAutorizacao(d),
-        blocoCliente(d.dadosCliente),
-        el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
-        d.paraHoje.length ? el('section', {},
+        // O que fazer vem primeiro; o resto fica em duas colunas (processo | cliente).
+        d.paraHoje.length ? el('section', { class: 'para-fazer' },
           el('div', { class: 'secao-titulo' }, el('span', {}, `Para fazer agora · ${d.paraHoje.length}`)),
           el('div', { class: 'tarefas' },
             d.paraHoje.map((t) => linhaTarefa(d, t)),
             simples.length > 1 ? el('button', { class: 'botao fantasma pequeno botao-todas', onclick: (e) => concluir(simples, e.currentTarget) }, ico('checks'), `Marcar as ${simples.length} ações como feitas`) : null)) : null,
-        el('section', {},
-          el('div', { class: 'secao-titulo' }, el('span', {}, 'Cronograma'),
-            canceladas ? el('button', { class: 'link-mini', onclick: () => { estado.verCanceladas = !estado.verCanceladas; desenharFicha(d); } }, estado.verCanceladas ? 'Esconder canceladas' : `Mostrar canceladas (${canceladas})`) : null),
-          el('ul', { class: 'linha-tempo' }, itens)),
-        el('details', { class: 'historico' },
-          el('summary', {}, el('div', { class: 'secao-titulo' }, el('span', {}, `Histórico · ${d.historico.length}`))),
-          el('ul', { class: 'historico-lista' }, d.historico.map((h) => el('li', {}, el('time', {}, dataCurta(h.data)), el('span', {}, `${h.por === 'sistema' ? 'Sistema' : h.por}: ${h.detalhes}`)))))));
+        cartaoAutorizacao(d),
+        numeros,
+        el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
+        el('div', { class: 'ficha-colunas' },
+          el('section', { class: 'coluna-cronograma' },
+            el('div', { class: 'secao-titulo' }, el('span', {}, 'Cronograma'),
+              canceladas ? el('button', { class: 'link-mini', onclick: () => { estado.verCanceladas = !estado.verCanceladas; desenharFicha(d); } }, estado.verCanceladas ? 'Esconder canceladas' : `Mostrar canceladas (${canceladas})`) : null),
+            el('ul', { class: 'linha-tempo' }, itens)),
+          el('div', { class: 'coluna-cliente' },
+            blocoCliente(d.dadosCliente),
+            el('details', { class: 'historico' },
+              el('summary', {}, el('div', { class: 'secao-titulo' }, el('span', {}, `Histórico · ${d.historico.length}`))),
+              el('ul', { class: 'historico-lista' }, d.historico.map((h) => el('li', {}, el('time', {}, dataCurta(h.data)), el('span', {}, `${h.por === 'sistema' ? 'Sistema' : h.por}: ${h.detalhes}`)))))))));
   }
 
   // ---------- Ações ----------
@@ -666,7 +744,86 @@
     }
   }
 
-// ---------- Promessa de pagamento ----------
+// ---------- Aviso em dois passos ----------
+  async function marcarEnviado(d, t, botao) {
+    if (!garantirUsuario()) return;
+    botao.disabled = true;
+    // Pede uma vez para avisar no navegador quando for hora de perguntar.
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+    try {
+      const r = await api(`/api/tarefas/${t.id}/enviado`, { method: 'POST', body: JSON.stringify({ por: estado.usuario }) });
+      const tt = r.tarefas.find((x) => x.id === t.id);
+      avisar(`Aviso enviado. Pergunto às ${horaDe(tt.retorno.proximaChecagem)} se o cliente respondeu.`);
+      await recarregar();
+      selecionar(d.id);
+    } catch (erro) {
+      botao.disabled = false;
+      avisar(erro.message, 'erro');
+    }
+  }
+  async function semRetorno(d, t, botao) {
+    if (!garantirUsuario()) return;
+    botao.disabled = true;
+    try {
+      const r = await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'sem-retorno' }) });
+      const tt = r.tarefas.find((x) => x.id === t.id);
+      avisar(`Anotado. Pergunto de novo às ${horaDe(tt.retorno.proximaChecagem)}.`);
+      await recarregar();
+      selecionar(d.id);
+    } catch (erro) {
+      botao.disabled = false;
+      avisar(erro.message, 'erro');
+    }
+  }
+  let retornoAtual = null;
+  function abrirRetorno(d, t) {
+    if (!garantirUsuario()) return;
+    retornoAtual = { d, t };
+    const f = $('#form-retorno');
+    f.reset();
+    $('#retorno-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#retorno-quando').textContent = `${t.descricao}, enviado às ${horaDe(t.retorno.enviadoEm)}.`;
+    efeitoRetorno();
+    $('#janela-retorno').showModal();
+  }
+  function efeitoRetorno() {
+    const tipo = $('#form-retorno').tipo.value;
+    $('#retorno-campo').hidden = tipo !== 'outro';
+    $('#form-retorno').texto.required = tipo === 'outro';
+    $('#retorno-efeito').textContent = {
+      regularizou: 'Abre a confirmação de regularização: os avisos desta etapa se encerram.',
+      promessa: 'Abre a promessa de pagamento: os próximos avisos ficam pausados até a data.',
+      outro: 'Fica anotado aqui e na ocorrência. O aviso continua aberto: finalize quando terminar as tentativas.',
+    }[tipo] || '';
+  }
+  async function enviarRetorno(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.reportValidity()) return;
+    const { d, t } = retornoAtual;
+    if (f.tipo.value === 'regularizou') {
+      $('#janela-retorno').close();
+      const decisao = decisaoDaEtapa(d, t);
+      if (decisao) abrirDecisao(d, decisao, 'sim'); else avisar('Esta etapa não tem a pergunta "regularizou?".', 'erro');
+      return;
+    }
+    if (f.tipo.value === 'promessa') { $('#janela-retorno').close(); abrirPromessa(d); return; }
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: f.texto.value }) });
+      $('#janela-retorno').close();
+      avisar('Retorno do cliente registrado');
+      await recarregar();
+      selecionar(d.id);
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  // ---------- Promessa de pagamento ----------
   // Decisão "regularizou?" pendente da mesma etapa do aviso (para o botão "Regularizou").
   const decisaoDaEtapa = (d, t) => (d.tarefas || []).find((x) => x.etapa === t.etapa && x.tipo === 'decisao' && x.status === 'pendente');
   let promessaAtual = null;
@@ -1091,6 +1248,10 @@
     recarregar();
   });
   $('#form-promessa').addEventListener('submit', enviarPromessa);
+  $('#form-retorno').addEventListener('submit', enviarRetorno);
+  $('#form-retorno').addEventListener('change', efeitoRetorno);
+  $('#retorno-cancelar').addEventListener('click', () => $('#janela-retorno').close());
+  $('#filtro-passo').addEventListener('change', (e) => trocarAba(e.target.value));
   $('#sino').addEventListener('click', (e) => { e.stopPropagation(); alternarSino(); });
   document.addEventListener('click', (e) => { if (!e.target.closest('.sino-area')) alternarSino(false); });
   $('#form-registro').addEventListener('submit', enviarRegistro);

@@ -554,3 +554,73 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 .lt-print { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--texto-2); text-decoration: none; }
 .lt-print img { width: 56px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--linha-forte); }
 .lt-print:hover span { color: var(--marca); text-decoration: underline; }
+
+/* =========================================================
+   Tela inicial reorganizada (nov/2026): faixa de números fina,
+   filtros num seletor, fila e ficha usando a altura toda.
+   ========================================================= */
+.barra { padding: 12px 24px 10px; }
+h1 { font-size: 20px; }
+.vista { gap: 12px; }
+
+/* Faixa de números (também filtros rápidos) */
+.faixa { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.faixa::-webkit-scrollbar { display: none; }
+.faixa-item { flex: 1 0 auto; display: flex; align-items: baseline; gap: 8px; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid var(--linha); border-radius: 12px; background: var(--superficie); box-shadow: var(--sombra); color: var(--texto-2); text-align: left; white-space: nowrap; line-height: 42px; transition: border-color .15s, background .15s; }
+.faixa-item i { align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--cor); box-shadow: 0 0 8px var(--cor); flex-shrink: 0; }
+.faixa-rotulo { font-size: 12.5px; font-weight: 500; }
+.faixa-item b { font: 600 18px var(--mono); color: var(--texto); }
+.faixa-item small { font-size: 11.5px; color: var(--texto-3); }
+.faixa-item.zero b { color: var(--texto-3); }
+.faixa-item.zero i { box-shadow: none; opacity: .5; }
+button.faixa-item:hover { border-color: var(--cor); }
+.faixa-item.ativa { border-color: var(--cor); background: color-mix(in srgb, var(--cor) 12%, var(--superficie)); }
+
+/* Mesa: a fila um pouco mais larga, ficha com o resto */
+.mesa { grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 12px; }
+
+/* Cabeça da fila: dias + filtros */
+.fila-cabeca { gap: 10px; padding: 10px 10px 8px; }
+.dia-chip { min-width: 56px; padding: 4px 9px; flex-direction: row; align-items: baseline; gap: 6px; }
+.dia-chip b { font-size: 13px; }
+.filtros { display: flex; flex-direction: column; gap: 6px; }
+.filtro-passo { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 4px 0 10px; border: 1px solid var(--linha-forte); border-radius: 9px; background: var(--superficie-2); }
+.filtro-passo:focus-within { border-color: var(--marca); box-shadow: var(--brilho); }
+.filtro-passo span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-3); }
+.filtro-passo select { flex: 1; min-width: 0; height: 32px; border: 0; outline: 0; background: none; color: var(--texto); font: 500 13px Inter, sans-serif; cursor: pointer; }
+.filtro-passo select option { background: var(--superficie); color: var(--texto); }
+.abas:empty { display: none; }
+.abas .aba { height: 26px; font-size: 12px; border: 1px solid var(--linha); }
+.abas .aba.ativa { border-color: transparent; }
+
+/* Grupos da fila fixos no topo ao rolar */
+.grupo { position: sticky; top: -6px; z-index: 1; margin: 0 -6px; padding: 10px 16px 6px; background: var(--superficie); }
+
+/* Ficha: "Para fazer agora" em destaque, depois duas colunas */
+.ficha-cabeca { padding: 14px 22px; }
+.ficha-corpo { gap: 18px; padding-top: 16px; }
+.para-fazer .tarefas { gap: 8px; }
+.ficha-colunas { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.coluna-cliente { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+@media (max-width: 1400px) { .ficha-colunas { grid-template-columns: minmax(0, 1fr); } }
+.numero { padding: 9px 12px; }
+.numero strong { font-size: 17px; }
+.etapas { grid-template-columns: repeat(var(--n, 6), minmax(0, 1fr)); }
+@media (max-width: 900px) { .etapas { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Aviso em dois passos */
+.botao.borda { border-color: var(--linha-forte); }
+.tarefa.enviado { border-color: color-mix(in srgb, var(--contato) 40%, var(--linha)); }
+.tarefa.enviado .icone { background: var(--contato-suave); color: var(--contato); }
+.tarefa.perguntar { border-color: var(--alerta); background: var(--alerta-suave); }
+.tarefa.perguntar .icone { background: var(--alerta-suave); color: var(--alerta); }
+.tarefa-texto small.perguntar b { color: var(--alerta); }
+.checagens { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--texto-2); }
+.checagens li { display: flex; gap: 8px; }
+.checagens time { font: 500 11px var(--mono); color: var(--texto-3); padding-top: 1px; }
+.checagens li.retorno { color: var(--texto); }
+.selo-mini.retorno { background: var(--contato-suave); color: var(--contato); }
+.escolha.tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.opcao.promessa input:checked + span { border-color: var(--alerta); background: var(--alerta-suave); color: var(--alerta); }
+.opcao.outro input:checked + span { border-color: var(--contato); background: var(--contato-suave); color: var(--contato); }
+@media (max-width: 520px) { .escolha.tres { grid-template-columns: 1fr; } }

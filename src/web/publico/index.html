@@ -51,7 +51,7 @@
             <input type="date" id="campo-data">
           </label>
           <div class="sino-area">
-            <button class="sino" id="sino" type="button" title="Respostas do Lucas" aria-haspopup="true" aria-expanded="false">
+            <button class="sino" id="sino" type="button" title="Avisos: retorno dos clientes e respostas do Lucas" aria-haspopup="true" aria-expanded="false">
               <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
               <b id="sino-total" hidden>0</b>
             </button>
@@ -70,16 +70,19 @@
 
       <!-- Vista: fila de hoje -->
       <section id="vista-hoje" class="vista">
-        <div class="painel-topo">
-          <div class="metricas" id="metricas"></div>
-          <div class="funil" id="funil" aria-label="Clientes por etapa"></div>
-        </div>
+        <div class="faixa" id="metricas" aria-label="Resumo do dia"></div>
 
         <div class="mesa">
           <section class="fila" aria-label="Fila de trabalho">
             <div class="fila-cabeca">
               <div class="dias-agenda" id="dias-agenda" aria-label="Escolher o dia"></div>
-              <div class="abas" id="abas" role="tablist"></div>
+              <div class="filtros">
+                <label class="filtro-passo">
+                  <span>Passo</span>
+                  <select id="filtro-passo" aria-label="Filtrar por passo"></select>
+                </label>
+                <div class="abas" id="abas" aria-label="Filtros rápidos"></div>
+              </div>
             </div>
             <div class="fila-lista" id="fila" role="listbox" aria-label="Clientes para atender hoje"></div>
             <div class="fila-rodape"><kbd>↑</kbd><kbd>↓</kbd> navegar <span class="sep">·</span> <kbd>/</kbd> buscar</div>
@@ -152,6 +155,29 @@
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="decisao-cancelar">Cancelar</button>
         <button type="submit" class="botao primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Retorno do cliente depois do aviso enviado -->
+  <dialog class="janela" id="janela-retorno">
+    <form method="dialog" id="form-retorno">
+      <span class="sobretitulo" id="retorno-cliente"></span>
+      <h3>O cliente deu retorno?</h3>
+      <p class="texto-suave" id="retorno-quando"></p>
+      <div class="escolha tres">
+        <label class="opcao sim"><input type="radio" name="tipo" value="regularizou" required><span>Regularizou</span></label>
+        <label class="opcao promessa"><input type="radio" name="tipo" value="promessa" required><span>Fez promessa</span></label>
+        <label class="opcao outro"><input type="radio" name="tipo" value="outro" required><span>Outro retorno</span></label>
+      </div>
+      <label class="campo" id="retorno-campo" hidden>
+        <span>O que o cliente respondeu?</span>
+        <textarea name="texto" rows="3" maxlength="2000" placeholder="Ex.: Disse que vai ver com o banco e retorna amanhã"></textarea>
+      </label>
+      <p class="efeito" id="retorno-efeito"></p>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="retorno-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario">Continuar</button>
       </div>
     </form>
   </dialog>

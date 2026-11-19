@@ -47,6 +47,8 @@ module.exports = {
     comentarOcorrencia: /^(sim|true|1)$/i.test(process.env.SGP_COMENTAR_OCORRENCIA || ''),
     // Quem é marcado para abrir a OS de retirada de equipamentos (username do SGP).
     responsavelOs: (process.env.SGP_RESPONSAVEL_OS || '').trim(),
+    // Na sincronização diária, avança cada cliente até o passo registrado nos comentários da ocorrência (SGP_POSICIONAR_AUTOMATICO=nao desliga).
+    posicionarAutomatico: !/^(nao|não|false|0)$/i.test(process.env.SGP_POSICIONAR_AUTOMATICO || 'sim'),
     // Avisos automáticos na ocorrência marcando alguém (ex.: OS de retirada). Desligado: só marca quem a pessoa escolher na tela.
     avisosAutomaticos: /^(sim|true|1)$/i.test(process.env.SGP_AVISOS_AUTOMATICOS || ''),
     // Supervisor (ex.: Lucas): de quem o sistema lê a resposta de autorização (username do SGP).

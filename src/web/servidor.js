@@ -28,6 +28,16 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     executar: async (dia) => {
       const r = await servico.sincronizarTudo({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia });
       await avisosPendentes(dia);
+      // Avança quem a Jéssica já tocou no SGP (lido nos comentários das ocorrências). Só avança, nunca volta.
+      if (!modoDemo && config.sgp.modo === 'api' && config.sgp.posicionarAutomatico) {
+        try {
+          const lista = await servico.posicionarPeloSgp({ sgp: criarSgp(dia), repositorio: armazenamento.repositorio, cronograma, hoje: dia, aplicar: true });
+          const n = lista.filter((x) => x.aplicado).length;
+          if (n) console.log(`Clientes avançados pela leitura das ocorrências: ${n}`);
+        } catch (erro) {
+          console.error(`Leitura das ocorrências para posicionar falhou: ${erro.message}`);
+        }
+      }
       return r;
     },
     hoje: hojeISO,

@@ -208,6 +208,15 @@
     if (p.modoDemo && !$('#campo-data').value) $('#campo-data').value = p.hoje;
     const total = p.resumo.paraHoje + p.resumo.atrasadas;
     $('#badge-hoje').textContent = total ? String(total) : '';
+    // Gráfico compacto de clientes por etapa, no espaço livre do topo (ao lado da saudação).
+    const funil = p.funil || [];
+    const emAndamento = funil.reduce((s, f) => s + f.total, 0);
+    $('#funil-topo').replaceChildren(
+      el('span', { class: 'ft-cabeca' },
+        el('span', { class: 'ft-barra', 'aria-hidden': 'true' }, funil.map((f, i) => (f.total ? el('i', { class: `f${i}`, style: `flex:${f.total}`, title: `${f.fase}: ${f.total}` }) : null))),
+        el('b', {}, `${emAndamento} em andamento`)),
+      el('span', { class: 'ft-legenda' }, funil.map((f, i) => el('span', { class: `ft-item${f.total ? '' : ' vazio'}`, title: `${f.fase}: ${f.total}` },
+        el('small', {}, el('i', { class: `f${i}` }), f.fase), el('b', {}, String(f.total))))));
     document.title = total ? `(${total}) Têmis · Cobrança` : 'Têmis · Cobrança';
   }
 
@@ -1336,6 +1345,7 @@
     recarregar();
   });
   $('#form-promessa').addEventListener('submit', enviarPromessa);
+  $('#funil-topo').addEventListener('click', () => trocarVista('etapas'));
   $('#form-retorno').addEventListener('submit', enviarRetorno);
   $('#form-retorno').addEventListener('change', efeitoRetorno);
   $('#retorno-cancelar').addEventListener('click', () => $('#janela-retorno').close());

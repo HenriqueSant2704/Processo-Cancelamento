@@ -148,13 +148,31 @@
         <textarea name="observacao" rows="3" required placeholder="Ex.: Pagou via PIX hoje às 10h / Não atendeu as ligações"></textarea>
       </label>
       <label class="campo">
-        <span>Mensagem para a ocorrência no SGP <em class="opcional">(opcional)</em></span>
-        <textarea name="mensagem" rows="3" maxlength="3000" placeholder="Escreva aqui se quiser mandar um texto seu (ex.: Lucas, o cliente pagou com o desconto que você autorizou). Em branco, vai a mensagem automática."></textarea>
+        <span>Mensagem para a ocorrência <em class="opcional">(pronta, ajuste o que precisar)</em></span>
+        <textarea name="mensagem" rows="5" maxlength="3000" placeholder="Em branco, vai a mensagem automática do sistema."></textarea>
       </label>
       <p class="efeito" id="decisao-efeito"></p>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="decisao-cancelar">Cancelar</button>
         <button type="submit" class="botao primario">Registrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Mensagem pronta para a ocorrência (ação feita, pedido ao Lucas) -->
+  <dialog class="janela larga-media" id="janela-mensagem">
+    <form method="dialog" id="form-mensagem">
+      <span class="sobretitulo" id="mensagem-cliente"></span>
+      <h3 id="mensagem-titulo"></h3>
+      <p class="texto-suave" id="mensagem-dica">A mensagem já vem pronta. Ajuste o que precisar: ela fica registrada na ocorrência do SGP.</p>
+      <label class="campo">
+        <span>Mensagem para a ocorrência</span>
+        <textarea name="mensagem" rows="8" maxlength="3000"></textarea>
+      </label>
+      <div class="marcar-area"></div>
+      <div class="janela-acoes">
+        <button type="button" class="botao fantasma" id="mensagem-cancelar">Cancelar</button>
+        <button type="submit" class="botao primario" id="mensagem-confirmar">Salvar</button>
       </div>
     </form>
   </dialog>
@@ -197,8 +215,8 @@
         <input name="observacao" maxlength="300" placeholder="Ex.: vai pagar via PIX quando receber o salário">
       </label>
       <label class="campo">
-        <span>Mensagem para a ocorrência no SGP <em class="opcional">(opcional)</em></span>
-        <textarea name="mensagem" rows="3" maxlength="3000" placeholder="Escreva aqui se quiser mandar um texto seu (ex.: Lucas, o cliente pagou com o desconto que você autorizou). Em branco, vai a mensagem automática."></textarea>
+        <span>Mensagem para a ocorrência <em class="opcional">(pronta, ajuste o que precisar)</em></span>
+        <textarea name="mensagem" rows="4" maxlength="3000" placeholder="Em branco, vai a mensagem automática do sistema."></textarea>
       </label>
       <div class="janela-acoes">
         <button type="button" class="botao fantasma" id="promessa-cancelar">Cancelar</button>
@@ -280,7 +298,7 @@
     <form method="dialog" id="form-anotacao">
       <span class="sobretitulo" id="anotacao-cliente"></span>
       <h3>Registrar na ocorrência</h3>
-      <p class="texto-suave">Fica no histórico do cliente aqui e vai para a ocorrência no SGP só como registro, sem marcar ninguém.</p>
+      <p class="texto-suave">Fica no histórico do cliente aqui e vai para a ocorrência no SGP. Só é notificado quem você marcar.</p>
       <label class="campo">
         <span>Texto</span>
         <textarea name="texto" rows="7" maxlength="3000" required minlength="3"></textarea>

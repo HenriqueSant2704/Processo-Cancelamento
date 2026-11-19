@@ -459,7 +459,7 @@
     } else {
       acoes = el('div', { class: 'acoes-tarefa' },
         t.ocorrenciaTipo && estado.criarOcorrencia ? el('button', { class: 'botao sgp', title: `Cria a ocorrência "${t.ocorrenciaTipo}" no SGP`, onclick: () => abrirOcorrencia(d, t) }, ico('acao'), 'Criar no SGP') : null,
-        el('button', { class: 'botao feito', title: 'Feito', onclick: (e) => concluir([t], e.currentTarget) }, ico('check'), 'Feito'));
+        el('button', { class: 'botao feito', title: 'Feito', onclick: () => feitoComMensagem(d, [t]) }, ico('check'), 'Feito'));
     }
     return el('div', { class: `tarefa ${t.tipo}${t.atrasada && !enviado ? ' atrasada' : ''}${enviado ? ' enviado' : ''}${perguntar ? ' perguntar' : ''}`, 'data-tarefa': t.id },
       el('span', { class: 'icone', html: ICONES[enviado ? 'relogio' : t.tipo] }),
@@ -555,6 +555,17 @@
   }
   async function responderAutorizacao(d, acaoNome, pergunta, botao) {
     if (!garantirUsuario()) return;
+    if (acaoNome === 'pedir') {
+      abrirMensagem({
+        d, titulo: 'Pedir autorização ao Lucas', texto: (d.modelos || {}).autorizacao || '', botao: 'Enviar pedido',
+        aoEnviar: async (mensagem, marcar) => {
+          await api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: 'pedir', mensagem, marcar }) });
+          avisar('Pedido registrado na ocorrência');
+          aposAcao();
+        },
+      });
+      return;
+    }
     const observacao = prompt(pergunta, '');
     if (observacao === null) return;
     botao.disabled = true;
@@ -636,7 +647,7 @@
           el('div', { class: 'secao-titulo' }, el('span', {}, `Para fazer agora · ${d.paraHoje.length}`)),
           el('div', { class: 'tarefas' },
             d.paraHoje.map((t) => linhaTarefa(d, t)),
-            simples.length > 1 ? el('button', { class: 'botao fantasma pequeno botao-todas', onclick: (e) => concluir(simples, e.currentTarget) }, ico('checks'), `Marcar as ${simples.length} ações como feitas`) : null)) : null,
+            simples.length > 1 ? el('button', { class: 'botao fantasma pequeno botao-todas', onclick: () => feitoComMensagem(d, simples) }, ico('checks'), `Marcar as ${simples.length} ações como feitas`) : null)) : null,
         cartaoAutorizacao(d),
         numeros,
         el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
@@ -744,6 +755,71 @@
     }
   }
 
+  // ---------- Quem marcar na ocorrência ----------
+  // Ninguém vem marcado: só é notificado no SGP quem a pessoa escolher.
+  function prepararMarcar(form) {
+    let area = form.querySelector('.marcar-area');
+    if (!area) {
+      area = el('div', { class: 'marcar-area' });
+      form.querySelector('.janela-acoes').before(area);
+    }
+    const pessoas = estado.pessoas || [];
+    area.hidden = !pessoas.length;
+    area.replaceChildren(
+      el('span', { class: 'marcar-titulo' }, 'Marcar na ocorrência ', el('em', { class: 'opcional' }, '(só quem for marcado recebe a notificação no SGP)')),
+      el('div', { class: 'marcar-lista' }, pessoas.map((p) => el('label', { class: 'marcar-pessoa' },
+        el('input', { type: 'checkbox', name: 'marcar', value: p.username }), el('span', {}, p.nome)))));
+  }
+  const marcadosEm = (form) => [...form.querySelectorAll('input[name=marcar]:checked')].map((i) => i.value);
+
+  // ---------- Mensagem pronta (ação feita, pedido ao Lucas) ----------
+  let mensagemAtual = null; // { aoEnviar(mensagem, marcar) }
+  function abrirMensagem({ d, titulo: tituloJanela, texto, botao = 'Salvar', aoEnviar }) {
+    if (!garantirUsuario()) return;
+    const f = $('#form-mensagem');
+    f.reset();
+    mensagemAtual = { aoEnviar };
+    $('#mensagem-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
+    $('#mensagem-titulo').textContent = tituloJanela;
+    $('#mensagem-confirmar').textContent = botao;
+    f.mensagem.value = texto || '';
+    prepararMarcar(f);
+    $('#janela-mensagem').showModal();
+    f.mensagem.focus();
+  }
+  async function enviarMensagem(e) {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const botao = f.querySelector('[type=submit]');
+    botao.disabled = true;
+    try {
+      await mensagemAtual.aoEnviar(f.mensagem.value, marcadosEm(f));
+      $('#janela-mensagem').close();
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+  // Ação "Feito" (uma ou várias): a mensagem e quem marcar vão com a última.
+  function feitoComMensagem(d, tarefas) {
+    const ultima = tarefas[tarefas.length - 1];
+    abrirMensagem({
+      d,
+      titulo: tarefas.length > 1 ? `Marcar as ${tarefas.length} ações como feitas` : ultima.descricao,
+      texto: (d.modelos || {})[ultima.id] || '',
+      botao: 'Marcar como feito',
+      aoEnviar: async (mensagem, marcar) => {
+        for (const t of tarefas) {
+          const extra = t === ultima ? { mensagem, marcar } : {};
+          await api(`/api/tarefas/${t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, ...extra }) });
+        }
+        avisar(tarefas.length > 1 ? `${tarefas.length} tarefas concluídas` : 'Tarefa concluída');
+        aposAcao();
+      },
+    });
+  }
+
 // ---------- Aviso em dois passos ----------
   async function marcarEnviado(d, t, botao) {
     if (!garantirUsuario()) return;
@@ -783,6 +859,7 @@
     f.reset();
     $('#retorno-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#retorno-quando').textContent = `${t.descricao}, enviado às ${horaDe(t.retorno.enviadoEm)}.`;
+    prepararMarcar(f);
     efeitoRetorno();
     $('#janela-retorno').showModal();
   }
@@ -811,7 +888,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: f.texto.value }) });
+      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: f.texto.value, marcar: marcadosEm(f) }) });
       $('#janela-retorno').close();
       avisar('Retorno do cliente registrado');
       await recarregar();
@@ -833,6 +910,9 @@
     const f = $('#form-promessa');
     f.reset();
     f.dataPromessa.min = hoje();
+    promessaAtual.editado = false;
+    f.mensagem.value = (d.modelos || {}).promessa || '';
+    prepararMarcar(f);
     $('#promessa-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#janela-promessa').showModal();
     f.dataPromessa.focus();
@@ -844,7 +924,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value, mensagem: f.mensagem.value }) });
+      await api(`/api/processos/${promessaAtual.id}/promessa`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, dataPromessa: f.dataPromessa.value, observacao: f.observacao.value, mensagem: f.mensagem.value.replace('{dataPromessa}', 'a data combinada'), marcar: marcadosEm(f) }) });
       $('#janela-promessa').close();
       avisar(`Promessa registrada para ${dataCurta(f.dataPromessa.value)}. Os avisos ficam pausados até lá.`);
       await aposAcao();
@@ -913,6 +993,7 @@
     $('#registro-titulo').textContent = t.descricao;
     f.texto.value = montarTextoRegistro(f);
     limparPrint();
+    prepararMarcar(f);
     $('#print-opcional').textContent = estado.printObrigatorio ? '(obrigatório)' : '(opcional)';
     $('#janela-registro').showModal();
   }
@@ -931,7 +1012,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true, print: printAtual || undefined }) });
+      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true, print: printAtual || undefined, marcar: marcadosEm(f) }) });
       $('#janela-registro').close();
       avisar('Aviso registrado');
       await aposAcao();
@@ -948,6 +1029,7 @@
     if (!garantirUsuario()) return;
     anotacaoAtual = d;
     $('#form-anotacao').reset();
+    prepararMarcar($('#form-anotacao'));
     $('#anotacao-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#janela-anotacao').showModal();
   }
@@ -958,7 +1040,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/processos/${anotacaoAtual.id}/registro`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, texto: f.texto.value }) });
+      await api(`/api/processos/${anotacaoAtual.id}/registro`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, texto: f.texto.value, marcar: marcadosEm(f) }) });
       $('#janela-anotacao').close();
       avisar('Registro salvo');
       await aposAcao();
@@ -1008,14 +1090,20 @@
     const f = $('#form-decisao');
     f.reset();
     f.resposta.value = resposta;
+    decisaoAtual.editado = false;
+    prepararMarcar(f);
     $('#decisao-cliente').textContent = titulo(d.cliente.nome);
     $('#decisao-pergunta').textContent = tarefa.descricao;
     efeitoDecisao();
     $('#janela-decisao').showModal();
     f.observacao.focus();
   }
-  function efeitoDecisao() {
-    const r = $('#form-decisao').resposta.value;
+  function efeitoDecisao(e) {
+    const f = $('#form-decisao');
+    const r = f.resposta.value;
+    // Mensagem pronta do sim/não (troca junto com a resposta enquanto a pessoa não editou).
+    if (e && e.target === f.mensagem) decisaoAtual.editado = true;
+    else if (!decisaoAtual.editado) { const m = ((decisaoAtual.d.modelos || {})[decisaoAtual.tarefa.id]) || {}; f.mensagem.value = m[r] || ''; }
     $('#decisao-rotulo').textContent = r === 'sim' ? 'Como regularizou? (forma de pagamento, data...)' : 'O que foi feito e por que não regularizou?';
     $('#decisao-efeito').textContent = r === 'sim' ? 'O processo segue para a liberação do serviço e o encerramento.' : r === 'nao' ? 'O processo avança para a próxima etapa e as novas datas são geradas.' : '';
   }
@@ -1026,7 +1114,7 @@
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${decisaoAtual.tarefa.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resposta: f.resposta.value, observacao: f.observacao.value, mensagem: f.mensagem.value }) });
+      await api(`/api/tarefas/${decisaoAtual.tarefa.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resposta: f.resposta.value, observacao: f.observacao.value, mensagem: f.mensagem.value, marcar: marcadosEm(f) }) });
       $('#janela-decisao').close();
       avisar(f.resposta.value === 'sim' ? 'Regularização registrada' : 'Registrado. Próxima etapa agendada');
       await aposAcao();
@@ -1274,6 +1362,14 @@
   $('#ajuste-cancelar').addEventListener('click', () => $('#janela-ajuste').close());
   $('#form-decisao').addEventListener('submit', enviarDecisao);
   $('#form-decisao').addEventListener('change', efeitoDecisao);
+  $('#form-decisao').addEventListener('input', (e) => { if (e.target.name === 'mensagem') decisaoAtual.editado = true; });
+  $('#form-mensagem').addEventListener('submit', enviarMensagem);
+  $('#mensagem-cancelar').addEventListener('click', () => $('#janela-mensagem').close());
+  $('#form-promessa').addEventListener('input', (e) => {
+    const f = e.currentTarget;
+    if (e.target === f.mensagem) { promessaAtual.editado = true; return; }
+    if (e.target === f.dataPromessa && !promessaAtual.editado && f.dataPromessa.value) f.mensagem.value = ((promessaAtual.modelos || {}).promessa || '').replace('{dataPromessa}', f.dataPromessa.value.split('-').reverse().join('/'));
+  });
   $('#decisao-cancelar').addEventListener('click', () => $('#janela-decisao').close());
   $('#form-senha').addEventListener('submit', trocarSenha);
   $('#senha-cancelar').addEventListener('click', () => $('#janela-senha').close());
@@ -1316,6 +1412,7 @@
       estado.comLogin = eu.comLogin;
       estado.criarOcorrencia = Boolean(eu.criarOcorrencia);
       estado.printObrigatorio = Boolean(eu.printObrigatorio);
+      estado.pessoas = Array.isArray(eu.pessoas) ? eu.pessoas : [];
       if (eu.comLogin) estado.usuario = eu.nome;
     } catch { /* segue sem login */ }
     desenharUsuario();

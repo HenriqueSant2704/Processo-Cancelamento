@@ -624,3 +624,15 @@ button.faixa-item:hover { border-color: var(--cor); }
 .opcao.promessa input:checked + span { border-color: var(--alerta); background: var(--alerta-suave); color: var(--alerta); }
 .opcao.outro input:checked + span { border-color: var(--contato); background: var(--contato-suave); color: var(--contato); }
 @media (max-width: 520px) { .escolha.tres { grid-template-columns: 1fr; } }
+
+/* Quem marcar na ocorrência (nenhum vem marcado) */
+.marcar-area { display: flex; flex-direction: column; gap: 8px; }
+.marcar-titulo { font-size: 13px; font-weight: 500; color: var(--texto-2); }
+.marcar-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+.marcar-pessoa { position: relative; }
+.marcar-pessoa input { position: absolute; opacity: 0; }
+.marcar-pessoa span { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1.5px solid var(--linha-forte); border-radius: 99px; font-size: 13px; font-weight: 600; color: var(--texto-2); cursor: pointer; transition: all .15s; }
+.marcar-pessoa span::before { content: "@"; font-family: var(--mono); color: var(--texto-3); }
+.marcar-pessoa input:checked + span { border-color: var(--marca); background: var(--marca-suave); color: var(--marca-texto); }
+.marcar-pessoa input:focus-visible + span { outline: 2px solid var(--marca); outline-offset: 2px; }
+.janela.larga-media { width: min(600px, calc(100vw - 32px)); }

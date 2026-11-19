@@ -175,6 +175,26 @@ function criarApp(opcoes) {
       if (processo.autorizacao && processo.autorizacao.status === 'autorizado') comentarInicioDaEtapa(processo, 'sistema');
     });
   }
+  // Regra do Pendente: encerrar uma etapa com "não regularizou" só depois que a Jéssica colocar
+  // a ocorrência como Pendente no SGP. O sistema confere o status na hora e explica o que falta.
+  const NOMES_STATUS = { 0: 'Aberta', 1: 'Encerrada', 2: 'Em execução', 3: 'Pendente' };
+  const conferirPendente = async (tarefaId) => {
+    if (typeof opcoes.statusOcorrenciaSgp !== 'function') return;
+    const processo = await repositorio.obterPorTarefa(tarefaId);
+    const tarefa = processo && processo.tarefas.find((t) => t.id === tarefaId);
+    // Só a pergunta "regularizou?" que encerra a etapa (promessa não cumprida volta aos avisos da mesma etapa).
+    if (!tarefa || tarefa.tipo !== 'decisao' || tarefa.status !== 'pendente' || tarefa.promessa) return;
+    if (!processo.ocorrencia || !processo.ocorrencia.numero) return; // sem ocorrência ligada não há o que conferir
+    let status;
+    try {
+      status = await opcoes.statusOcorrenciaSgp(processo.ocorrencia.numero);
+    } catch {
+      throw new ErroHttp(503, `Não consegui conferir no SGP se a ocorrência ${processo.ocorrencia.numero} está Pendente. Tente de novo em instantes.`);
+    }
+    if (status === 3) return;
+    const agora = status == null ? 'não encontrei a ocorrência no SGP' : `ela ainda está ${NOMES_STATUS[status] || `com status ${status}`}`;
+    throw new ErroHttp(409, `Para encerrar essa etapa, coloque a ocorrência ${processo.ocorrencia.numero} como Pendente no SGP. Verifiquei agora e ${agora}.`);
+  };
   const hoje = () => hojeISO();
   const limitador = criarLimitador();
   const sincronizador = opcoes.sincronizador || criarSincronizador({
@@ -381,6 +401,7 @@ function criarApp(opcoes) {
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
         const corpo = await lerCorpo(req);
         const texto = (v, max = 1000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+        if (corpo.resposta === 'nao') await conferirPendente(m[1]);
         // Registro de tentativas de contato (ligação, mensagem, e-mail...): fica na tarefa e vai para a
         // ocorrência só como registro, sem marcar ninguém.
         const registro = corpo.registro === true;

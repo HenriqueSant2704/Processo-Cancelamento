@@ -127,8 +127,15 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     console.log('Autorização do supervisor entre etapas: LIGADA (lê a resposta na ocorrência a cada 10 minutos).');
   }
 
+  // Regra do Pendente: só com o SGP real (é lá que a Jéssica muda o status da ocorrência).
+  const statusOcorrenciaSgp = !modoDemo && config.sgp.modo === 'api' && config.sgp.exigirPendente
+    ? (numero) => criarSgp(hojeISO()).statusDaOcorrencia(numero)
+    : null;
+  if (statusOcorrenciaSgp) console.log('Regra do Pendente: LIGADA (para encerrar etapa com "não regularizou", a ocorrência precisa estar Pendente).');
+
   const app = criarApp({
     exigirAutorizacao,
+    statusOcorrenciaSgp,
     lerAutorizacoes: exigirAutorizacao ? lerAutorizacoes : null,
     registrarAoAutorizar: (fn) => { aoAutorizar = fn; },
     aposAcao: () => avisosPendentes(hojeISO()),

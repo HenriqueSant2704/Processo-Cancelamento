@@ -80,6 +80,13 @@ function criarFonteApi(config, opcoesApi = {}) {
       const achada = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
       return achada && Array.isArray(achada.comentarios) ? achada.comentarios : [];
     },
+    // Status atual da ocorrência (0 Aberta, 1 Encerrada, 2 Em execução, 3 Pendente). null = não achou.
+    async statusDaOcorrencia(numero) {
+      const origem = new URL(config.sgp.uraClientesUrl).origin;
+      const oc = criarApiOcorrencias({ origem, app: config.sgp.app, token: config.sgp.token, ...(opcoesApi.ocorrencias || {}) });
+      const achada = (await oc.listarOcorrencias({ ocorrencia: String(numero) })).find((o) => String(o.numero) === String(numero));
+      return achada && achada.status_id != null ? Number(achada.status_id) : null;
+    },
     // Feriados cadastrados no SGP (os recorrentes valem para este ano e os 2 próximos).
     async listarFeriados() {
       const { getComCorpo } = require('./ocorrencias');

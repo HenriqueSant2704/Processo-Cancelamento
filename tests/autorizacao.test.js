@@ -126,3 +126,36 @@ test('sem a exigência ligada, o processo segue direto como antes', async (t) =>
   assert.strictEqual(d.autorizacao, null);
   assert.ok(d.paraHoje.length > 0);
 });
+
+test('regra do Pendente: "não regularizou" só passa com a ocorrência Pendente no SGP', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  const p = await prepararNaoRegularizou(repositorio);
+  let status = 0;
+  const consultas = [];
+  const chamar = subir(t, { repositorio, statusOcorrenciaSgp: async (n) => { consultas.push(n); return status; } });
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
+  const caminho = `/api/tarefas/${decisao.id}/concluir?data=2026-11-23`;
+
+  let r = await chamar(caminho, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  assert.strictEqual(r.status, 409);
+  assert.match(r.json.erro, /coloque a ocorrência 999 como Pendente no SGP\. Verifiquei agora e ela ainda está Aberta/);
+  assert.deepStrictEqual(consultas, ['999']);
+  assert.strictEqual((await repositorio.obter('1')).tarefas.find((x) => x.id === decisao.id).status, 'pendente');
+
+  status = 3;
+  r = await chamar(caminho, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  assert.strictEqual(r.status, 200);
+  assert.notStrictEqual(r.json.etapaAtual, decisao.etapa);
+});
+
+test('regra do Pendente: "regularizou" não depende do status e SGP fora do ar dá aviso claro', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  const p = await prepararNaoRegularizou(repositorio);
+  const chamar = subir(t, { repositorio, statusOcorrenciaSgp: async () => { throw new Error('fora'); } });
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
+  const r = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'x' });
+  assert.strictEqual(r.status, 503);
+  assert.match(r.json.erro, /Não consegui conferir/);
+  const ok = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'sim', observacao: 'Pagou' });
+  assert.strictEqual(ok.status, 200);
+});

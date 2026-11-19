@@ -61,7 +61,7 @@ test('"não regularizou": cliente para em Aguardando autorização até o Lucas 
   let aoAutorizar = null;
   const chamar = subir(t, { repositorio, exigirAutorizacao: true, responsavelSgp: 'jessica_rasteiro', supervisorSgp: 'admin', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); }, registrarAoAutorizar: (fn) => { aoAutorizar = fn; } });
   const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
-  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno', marcar: ['admin'] });
 
   let painel = (await chamar('/api/painel?data=2026-11-23')).json;
   assert.strictEqual(painel.resumo.aguardandoAutorizacao, 1);
@@ -88,7 +88,7 @@ test('"não regularizou": cliente para em Aguardando autorização até o Lucas 
   assert.match(painel.notificacoes[0].resposta.texto, /Pode seguir/);
   await new Promise((r) => setTimeout(r, 20));
   assert.match(comentarios[1].texto, /Nova etapa/);
-  assert.deepStrictEqual(comentarios[1].marcar, ['jessica_rasteiro']);
+  assert.deepStrictEqual(comentarios[1].marcar, []);
 
   await chamar('/api/processos/1/autorizacao?data=2026-11-24', { por: 'Jessica', acao: 'visto' });
   assert.strictEqual((await chamar('/api/painel?data=2026-11-24')).json.notificacoes.length, 0);
@@ -158,4 +158,15 @@ test('regra do Pendente: "regularizou" não depende do status e SGP fora do ar d
   assert.match(r.json.erro, /Não consegui conferir/);
   const ok = await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'sim', observacao: 'Pagou' });
   assert.strictEqual(ok.status, 200);
+});
+
+test('resposta do Lucas é achada depois do pedido escrito pela Jéssica (texto livre)', () => {
+  const { acharResposta } = require('../src/processos/autorizacao');
+  const comentarios = [
+    { usuario: 'admin', comentario: 'resposta antiga', data_cadastro: '2026-11-10' },
+    { usuario: 'temis_integracao', comentario: 'Lucas, se não tivermos um retorno até hoje, a negativação poderá ser realizada conforme previsto?', data_cadastro: '2026-11-23' },
+    { usuario: 'admin', comentario: 'Pode sim', data_cadastro: '2026-11-23' },
+  ];
+  const r = acharResposta(comentarios, { supervisor: 'admin', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-23' });
+  assert.strictEqual(r.texto, 'Pode sim');
 });

@@ -13,6 +13,7 @@ const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 const { lerPrint } = require('../processos/prints');
 const { marcarEnviado, registrarChecagem } = require('../processos/retorno');
+const { modelosDoProcesso } = require('../processos/mensagens');
 
 const PUBLICO = path.join(__dirname, 'publico');
 const TIPOS = {
@@ -131,11 +132,16 @@ function criarApp(opcoes) {
   const { repositorio, usuarios = null, cronograma, criarSgp, modoDemo = false, cookieSeguro = false, atrasDeProxy = false, criarOcorrenciaSgp = null, comentarOcorrenciaSgp = null, anexarOcorrenciaSgp = null, printObrigatorio = false, responsavelSgp = '', supervisorSgp = '', nomes = {} } = opcoes;
   // Nome de quem é marcado, para a saudação do comentário (ex.: { admin: 'Lucas', jessica_rasteiro: 'Jéssica' }).
   const nomeDe = (username) => nomes[username] || '';
+  // Pessoas que a tela oferece para marcar na ocorrência. Ninguém é marcado sem ser escolhido.
+  const pessoas = [...new Set([...Object.keys(nomes), supervisorSgp, responsavelSgp, opcoes.responsavelOsSgp].filter(Boolean))]
+    .map((username) => ({ username, nome: nomes[username] || username }));
+  const marcadosDe = (corpo) => [...new Set((Array.isArray(corpo.marcar) ? corpo.marcar : []).map(String))].filter((u) => pessoas.some((p) => p.username === u)).slice(0, 6);
+  const mensagemDe = (corpo) => (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : '');
   // Detalhe do processo para a ficha, com os dados do cliente vindos do SGP (se já sincronizados).
   const detalhe = async (processo, dia) => {
     const dados = typeof repositorio.obterFicha === 'function' ? await repositorio.obterFicha(processo.cliente.contrato) : null;
     const anexos = typeof repositorio.listarAnexos === 'function' ? await repositorio.listarAnexos(processo.id) : [];
-    return { ...visao.detalheProcesso(processo, dia, cronograma), dadosCliente: dados, anexos };
+    return { ...visao.detalheProcesso(processo, dia, cronograma), dadosCliente: dados, anexos, modelos: modelosDoProcesso(processo, { cronograma, hoje: dia }) };
   };
   // Print do aviso na ocorrência do SGP (melhor esforço, na mesma fila dos comentários).
   const enviarPrint = (processo, anexoId, print, descricao) => {
@@ -152,7 +158,7 @@ function criarApp(opcoes) {
     // Depois de qualquer ação, confere avisos pendentes (ex.: OS de retirada que acabou de ficar para hoje).
     if (typeof opcoes.aposAcao === 'function') Promise.resolve().then(opcoes.aposAcao).catch(() => {});
     if (!comentarOcorrenciaSgp || !processo.ocorrencia || !processo.ocorrencia.numero) return;
-    const marcar = (evento.marcar || [responsavelSgp]).filter(Boolean);
+    const marcar = (evento.marcar || []).filter(Boolean); // só quem a pessoa escolheu
     const contexto = { processo, hoje: hoje(), nomeDestinatario: nomeDe(marcar[0]) };
     const html = htmlComentario(evento, contexto);
     const texto = textoComentario(evento, contexto);
@@ -162,7 +168,7 @@ function criarApp(opcoes) {
   };
   // Mudou de etapa: avisa o supervisor (fim da etapa) e a responsável (início da próxima).
   // mensagem: texto próprio que a pessoa escreveu para o supervisor (substitui o automático).
-  const avisarTrocaDeEtapa = (processo, { etapaAnteriorId, tarefa, por, mensagem }) => {
+  const avisarTrocaDeEtapa = (processo, { etapaAnteriorId, tarefa, por, mensagem, marcar = [] }) => {
     const anterior = obterEtapa(cronograma, etapaAnteriorId);
     const nova = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
     const avisos = processo.tarefas.filter((t) => t.etapa === anterior.id && t.tipo === 'contato' && t.status === 'concluida');
@@ -174,7 +180,7 @@ function criarApp(opcoes) {
       resposta: tarefa.resposta, proximaEtapa: nova ? nova.nome : null, resultado: processo.resultado,
       por, data: hoje(), observacao: tarefa.observacao,
       mensagem, titulo: `Etapa encerrada: ${anterior.nome}`,
-      marcar: [supervisorSgp || responsavelSgp],
+      marcar,
     });
     // Esperando o supervisor: o início da próxima etapa só é comentado quando ele autorizar.
     if (nova && !bloqueada(processo)) comentarInicioDaEtapa(processo, por);
@@ -183,7 +189,7 @@ function criarApp(opcoes) {
     const nova = processo.etapaAtual ? obterEtapa(cronograma, processo.etapaAtual) : null;
     if (!nova) return;
     const afazer = processo.tarefas.filter((t) => t.etapa === nova.id && t.status === 'pendente');
-    comentar(processo, { tipo: 'inicio-etapa', etapa: nova.nome, tarefas: afazer, por, data: hoje(), marcar: [responsavelSgp] });
+    comentar(processo, { tipo: 'inicio-etapa', etapa: nova.nome, tarefas: afazer, por, data: hoje(), marcar: [] });
   };
   // A leitura automática (servidor) achou "autorizado": comenta o início da etapa para a Jéssica.
   if (typeof opcoes.registrarAoAutorizar === 'function') {
@@ -260,7 +266,7 @@ function criarApp(opcoes) {
         return responderJson(res, 200, { ok: true }, { 'Set-Cookie': cookieSessao('', 0) });
       }
       if (req.method === 'GET' && url.pathname === '/api/eu') {
-        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null, criarOcorrencia: Boolean(criarOcorrenciaSgp), printObrigatorio: Boolean(printObrigatorio) });
+        return responderJson(res, 200, { comLogin: Boolean(usuarios), nome: usuario ? usuario.nome : null, login: usuario ? usuario.login : null, criarOcorrencia: Boolean(criarOcorrenciaSgp), printObrigatorio: Boolean(printObrigatorio), pessoas });
       }
       // Imagem de um print guardado (só tipos de imagem conhecidos, nunca HTML).
       if (req.method === 'GET' && (m = url.pathname.match(/^\/api\/anexos\/(\d+)$/))) {
@@ -361,7 +367,7 @@ function criarApp(opcoes) {
         }
         if (corpo.acao === 'autorizar' && antes !== 'autorizado') comentarInicioDaEtapa(processo, por);
         if (corpo.acao === 'pedir') {
-          comentar(processo, { tipo: 'aviso', titulo: 'Pedido de autorização', texto: `${observacao ? `${observacao} ` : ''}Posso dar continuidade? A próxima etapa só começa depois da sua resposta aqui na ocorrência.`, por, data: hoje, marcar: [supervisorSgp || responsavelSgp] });
+          comentar(processo, { tipo: 'aviso', titulo: 'Pedido de autorização', texto: `${observacao ? `${observacao} ` : ''}Posso dar continuidade? A próxima etapa só começa depois da sua resposta aqui na ocorrência.`, mensagem: mensagemDe(corpo), por, data: hoje, marcar: marcadosDe(corpo) });
         }
         return responderJson(res, 200, await detalhe(processo, hoje));
       }
@@ -381,7 +387,7 @@ function criarApp(opcoes) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw erro;
         }
-        comentar(processo, { tipo: 'registro', titulo: 'Registro do financeiro', texto, por, data: hoje, marcar: [] });
+        comentar(processo, { tipo: 'registro', titulo: 'Registro do financeiro', texto, por, data: hoje, marcar: marcadosDe(corpo) });
         return responderJson(res, 200, await detalhe(processo, hoje));
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/processos\/(\d+)\/promessa$/))) {
@@ -397,7 +403,7 @@ function criarApp(opcoes) {
           };
           registrarPromessa(processo, dadosPromessa, cronograma);
           await repositorio.salvarProcesso(processo);
-          comentar(processo, { tipo: 'promessa', ...dadosPromessa, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: 'Promessa de pagamento' });
+          comentar(processo, { tipo: 'promessa', ...dadosPromessa, mensagem: mensagemDe(corpo), titulo: 'Promessa de pagamento', marcar: marcadosDe(corpo) });
         } catch (erro) {
           if (erro instanceof ErroConflito) throw new ErroHttp(409, erro.message);
           throw new ErroHttp(400, erro.message);
@@ -436,7 +442,7 @@ function criarApp(opcoes) {
             const tarefa = registrarChecagem(processo, m[1], { por, agora: momento, data: hoje, resultado: corpo.resultado, texto: corpo.texto }, cronograma);
             await repositorio.salvarProcesso(processo);
             if (corpo.resultado === 'retorno') {
-              comentar(processo, { tipo: 'registro', titulo: `Retorno do cliente: ${tarefa.descricao}`, texto: tarefa.retorno.checagens.at(-1).texto, por, data: hoje, marcar: [] });
+              comentar(processo, { tipo: 'registro', titulo: `Retorno do cliente: ${tarefa.descricao}`, texto: tarefa.retorno.checagens.at(-1).texto, por, data: hoje, marcar: marcadosDe(corpo) });
             }
             return responderJson(res, 200, await detalhe(processo, hoje));
           }
@@ -476,9 +482,11 @@ function criarApp(opcoes) {
             data: hoje,
           });
           const trocouEtapa = processo.etapaAtual !== tarefa.etapa;
+          const mensagem = mensagemDe(corpo);
+          const marcar = marcadosDe(corpo);
           const eventoTarefa = registro && tarefa.tipo !== 'decisao' && tarefa.observacao
-            ? { tipo: 'registro', titulo: `Registro: ${tarefa.descricao}`, texto: tarefa.observacao, por: tarefa.concluidaPor, data: hoje, marcar: [] }
-            : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao };
+            ? { tipo: 'registro', titulo: `Registro: ${tarefa.descricao}`, texto: tarefa.observacao, por: tarefa.concluidaPor, data: hoje, marcar }
+            : { tipo: 'tarefa', tarefa, por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem, titulo: tarefa.descricao, marcar };
           if (trocouEtapa) {
             // "Não regularizou" e há próxima etapa: espera a autorização do supervisor antes de começar.
             if (opcoes.exigirAutorizacao && tarefa.resposta === 'nao' && processo.status === 'ativo' && processo.etapaAtual) {
@@ -486,11 +494,12 @@ function criarApp(opcoes) {
               await repositorio.salvarProcesso(processo);
             }
             // Fim de etapa: comentário para o supervisor (Lucas) e, se houver, início da próxima para a Jéssica.
-            if (tarefa.tipo !== 'decisao') comentar(processo, eventoTarefa);
-            avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : '') });
+            // Com mensagem escrita, ela vai uma vez só, no comentário de fim da etapa.
+            if (tarefa.tipo !== 'decisao' && (!mensagem || registro)) comentar(processo, registro ? eventoTarefa : { ...eventoTarefa, marcar: [] });
+            avisarTrocaDeEtapa(processo, { etapaAnteriorId: tarefa.etapa, tarefa, por: tarefa.concluidaPor, mensagem: registro ? '' : mensagem, marcar: registro ? [] : marcar });
           } else {
             comentar(processo, tarefa.tipo === 'decisao'
-              ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem: (typeof corpo.mensagem === 'string' ? corpo.mensagem.trim().slice(0, 3000) : ''), titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
+              ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem, marcar, titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
               : eventoTarefa);
           }
           if (print && typeof repositorio.salvarAnexo === 'function') {

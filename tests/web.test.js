@@ -149,12 +149,12 @@ test('comentários automáticos na ocorrência a cada ação (quando ligado)', a
   assert.match(comentarios[0].texto, /1ª de 3/);
   assert.match(comentarios[0].texto, /Jessica/);
   assert.match(comentarios[0].html, /<b>/);
-  assert.deepStrictEqual(comentarios[0].marcar, ['jessica_rasteiro']);
+  assert.deepStrictEqual(comentarios[0].marcar, []); // ninguém é marcado sozinho
   assert.match(comentarios[1].texto, /Promessa de pagamento registrada/);
   assert.match(comentarios[1].texto, /20\/11\/2026/);
 });
 
-test('fim de etapa marca o supervisor e o início da próxima marca a responsável', async (t) => {
+test('fim de etapa e início da próxima: só marca quem a pessoa escolheu', async (t) => {
   const { criarProcesso } = require('../src/cronograma/motor');
   const repositorio = new RepositorioJson(null);
   const cronograma = carregarCronograma();
@@ -164,13 +164,13 @@ test('fim de etapa marca o supervisor e o início da próxima marca a responsáv
   const comentarios = [];
   const { chamar } = subir(t, { repositorio, modoDemo: true, responsavelSgp: 'jessica_rasteiro', supervisorSgp: 'lucas_sgp', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
   const decisao = p.tarefas.find((x) => x.tipo === 'decisao');
-  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno nas 3 tentativas' });
+  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno nas 3 tentativas', marcar: ['lucas_sgp', 'intruso'] });
   await new Promise((r) => setTimeout(r, 30));
   assert.strictEqual(comentarios.length, 2);
-  assert.deepStrictEqual(comentarios[0].marcar, ['lucas_sgp']);
+  assert.deepStrictEqual(comentarios[0].marcar, ['lucas_sgp']); // só quem foi escolhido (e existe na lista)
   assert.match(comentarios[0].texto, /não regularizou/);
   assert.match(comentarios[0].texto, /Posso dar continuidade\?/);
-  assert.deepStrictEqual(comentarios[1].marcar, ['jessica_rasteiro']);
+  assert.deepStrictEqual(comentarios[1].marcar, []);
   assert.match(comentarios[1].texto, /Nova etapa: Negativação/);
   assert.match(comentarios[1].texto, /Negativar o cliente/);
 });
@@ -187,7 +187,7 @@ test('mensagem própria da Jéssica substitui o texto automático no comentário
   const decisao = p.tarefas.find((x) => x.tipo === 'decisao');
   await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-17`, { por: 'Jessica', resposta: 'sim', observacao: 'Pagou', mensagem: 'Lucas, o cliente pagou com o desconto que você autorizou.' });
   await new Promise((r) => setTimeout(r, 30));
-  assert.deepStrictEqual(comentarios[0].marcar, ['admin']);
+  assert.deepStrictEqual(comentarios[0].marcar, []); // sem escolher ninguém, ninguém é marcado
   assert.match(comentarios[0].texto, /o cliente pagou com o desconto que você autorizou/);
   assert.doesNotMatch(comentarios[0].texto, /Resultado:/);
 });
@@ -234,4 +234,39 @@ test('scripts da tela não têm erro de sintaxe', () => {
   const { execFileSync } = require('node:child_process');
   const path = require('node:path');
   for (const arquivo of ['app.js', 'login.js']) execFileSync(process.execPath, ['--check', path.join(__dirname, '..', 'src', 'web', 'publico', arquivo)]);
+});
+
+test('mensagens prontas: cada passo vem com o texto padrão e quem pode ser marcado', async (t) => {
+  const { criarProcesso, concluirTarefa } = require('../src/cronograma/motor');
+  const repositorio = new RepositorioJson(null);
+  const cronograma = carregarCronograma();
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.ocorrencia = { numero: '999' };
+  for (const x of p.tarefas.filter((y) => y.tipo !== 'decisao')) concluirTarefa(p, x.id, { por: 'Jessica', data: x.data }, cronograma);
+  await repositorio.salvarProcesso(p);
+  const comentarios = [];
+  const { chamar } = subir(t, { repositorio, modoDemo: true, supervisorSgp: 'admin', responsavelOsSgp: 'miguel_santana', nomes: { admin: 'Lucas', jessica_rasteiro: 'Jéssica', miguel_santana: 'Miguel' }, comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
+  const eu = (await chamar('/api/eu')).json;
+  assert.deepStrictEqual(eu.pessoas.map((x) => x.nome), ['Lucas', 'Jéssica', 'Miguel']);
+  const d = '?data=2026-11-23';
+  let ficha = (await chamar(`/api/processos/1${d}`)).json;
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao');
+  assert.match(ficha.modelos[decisao.id].nao, /negativação poderá ser realizada conforme previsto/);
+  assert.match(ficha.modelos[decisao.id].sim, /regularizou/);
+  ficha = (await chamar(`/api/tarefas/${decisao.id}/concluir${d}`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno', mensagem: ficha.modelos[decisao.id].nao, marcar: ['admin'] })).json;
+  // Negativação: a última ação traz o texto "negativação realizada".
+  const acoes = ficha.paraHoje.filter((x) => x.tipo === 'acao');
+  assert.strictEqual(acoes.length, 2);
+  assert.strictEqual(ficha.modelos[acoes[0].id], 'Negativar o cliente: feito.');
+  await chamar(`/api/tarefas/${acoes[0].id}/concluir${d}`, { por: 'Jessica' });
+  ficha = (await chamar(`/api/processos/1${d}`)).json;
+  assert.match(ficha.modelos[acoes[1].id], /a negativação foi devidamente realizada/);
+  comentarios.length = 0;
+  await chamar(`/api/tarefas/${acoes[1].id}/concluir${d}`, { por: 'Jessica', mensagem: ficha.modelos[acoes[1].id], marcar: ['admin'] });
+  await new Promise((r) => setTimeout(r, 30));
+  // Uma mensagem só no fim da etapa (a escrita), marcando quem foi escolhido; o início da próxima não marca ninguém.
+  assert.strictEqual(comentarios.length, 2);
+  assert.match(comentarios[0].texto, /negativação foi devidamente realizada/);
+  assert.deepStrictEqual(comentarios[0].marcar, ['admin']);
+  assert.deepStrictEqual(comentarios[1].marcar, []);
 });

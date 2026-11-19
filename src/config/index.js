@@ -47,7 +47,9 @@ module.exports = {
     comentarOcorrencia: /^(sim|true|1)$/i.test(process.env.SGP_COMENTAR_OCORRENCIA || ''),
     // Quem é marcado para abrir a OS de retirada de equipamentos (username do SGP).
     responsavelOs: (process.env.SGP_RESPONSAVEL_OS || '').trim(),
-    // Supervisor (ex.: Lucas): marcado no fim de cada etapa (username do SGP).
+    // Avisos automáticos na ocorrência marcando alguém (ex.: OS de retirada). Desligado: só marca quem a pessoa escolher na tela.
+    avisosAutomaticos: /^(sim|true|1)$/i.test(process.env.SGP_AVISOS_AUTOMATICOS || ''),
+    // Supervisor (ex.: Lucas): de quem o sistema lê a resposta de autorização (username do SGP).
     supervisor: (process.env.SGP_SUPERVISOR || '').trim(),
     // Antes de começar a próxima etapa (depois de um "não regularizou"), espera a resposta do supervisor na ocorrência.
     exigirAutorizacao: !/^(nao|não|false|0)$/i.test(process.env.SGP_EXIGIR_AUTORIZACAO || 'sim'),

@@ -1,0 +1,22 @@
+{
+  "_observacoes": [
+    "Mensagens prontas que aparecem na tela em cada passo. A pessoa edita antes de salvar e escolhe quem marcar na ocorrência.",
+    "Nada é marcado sozinho: só quem for escolhido nas caixinhas recebe a notificação no SGP.",
+    "Chaves: decisao:<sim|nao>:<id da etapa> (pergunta 'regularizou?'), decisao:<sim|nao> (padrão), fim-etapa:<id da etapa> (última ação da etapa), acao:<texto da ação> (uma ação específica), acao (padrão), promessa, autorizacao.",
+    "Campos que o sistema preenche: {cliente} {contrato} {etapa} {proximaEtapa} {acao} {tentativas} {valor} {hoje}. Na promessa, {dataPromessa} é preenchido ao escolher a data."
+  ],
+  "decisao:nao:notificacao-negativacao": "Lucas, se não tivermos um retorno até hoje, a negativação poderá ser realizada conforme previsto?",
+  "decisao:nao:aviso-cancelamento": "Lucas, caso não haja nenhum retorno no dia de hoje, o cancelamento poderá ser realizado conforme previsto?",
+  "decisao:nao:aguardo-negativado": "Olá, Lucas,\n\nO cliente não regularizou as pendências após a negativação. Podemos seguir com o aviso de cancelamento?",
+  "decisao:nao:retirada-equipamentos": "Olá, Lucas,\n\nOs equipamentos não foram devolvidos dentro do prazo. Podemos gerar a cobrança de indenização?",
+  "decisao:nao:notificacao-pos-cancelamento": "Olá, Lucas,\n\nO cliente não regularizou as pendências após as notificações da negativação pós-cancelamento. Podemos encerrar a ocorrência?",
+  "decisao:nao": "Olá, Lucas,\n\nO cliente não regularizou as pendências ({tentativas}). Podemos seguir para a próxima etapa ({proximaEtapa})?",
+  "decisao:sim:retirada-equipamentos": "Olá, Lucas,\n\nInformo que os equipamentos foram devolvidos.",
+  "decisao:sim": "Olá, Lucas,\n\nInformo que o cliente regularizou as pendências em {hoje}.\n\nForma de pagamento: ",
+  "fim-etapa:negativacao": "Olá, Lucas,\n\nInformo que a negativação foi devidamente realizada, bem como o envio da notificação correspondente.\n\nA tag foi anexada ao sistema.\n\nEncaminho também os prints para conferência.",
+  "fim-etapa:cancelamento": "Olá, Lucas,\n\nInformo que o cancelamento foi devidamente realizado, bem como o envio da notificação correspondente.\n\nA tag foi anexada ao sistema.\n\nEncaminho também os prints para conferência.",
+  "acao:Abrir OS de retirada de equipamentos": "Olá, Miguel,\n\nVocê pode, por gentileza, abrir uma ordem de serviço para a retirada dos equipamentos.\n\nTem envelope para ser entregue.",
+  "acao": "{acao}: feito.",
+  "promessa": "Olá, Lucas,\n\nO cliente prometeu regularizar as pendências até {dataPromessa}. Os próximos avisos ficam pausados até essa data.",
+  "autorizacao": "Olá, Lucas,\n\nO cliente não regularizou as pendências em \"{etapa}\". Podemos seguir para \"{proximaEtapa}\"?"
+}

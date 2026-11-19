@@ -82,8 +82,10 @@ function acharResposta(comentarios, { supervisor, usuarioSistema, pedidoEm }) {
   const lista = Array.isArray(comentarios) ? comentarios : [];
   const sup = String(supervisor || '').toLowerCase();
   let inicio = -1;
+  // Último comentário do sistema a partir do dia do pedido (é o pedido; o texto é livre).
   lista.forEach((c, i) => {
-    if (String(c.usuario || '').toLowerCase() === String(usuarioSistema || '').toLowerCase() && /posso dar continuidade/i.test(c.comentario || '')) inicio = i;
+    const doSistema = String(c.usuario || '').toLowerCase() === String(usuarioSistema || '').toLowerCase();
+    if (doSistema && (String(c.data_cadastro || '').slice(0, 10) >= pedidoEm || /posso dar continuidade/i.test(c.comentario || ''))) inicio = i;
   });
   const candidatos = lista
     .map((c, i) => ({ ...c, i }))

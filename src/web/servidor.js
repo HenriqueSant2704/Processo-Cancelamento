@@ -89,8 +89,9 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
   }
 
   // Avisos pendentes na ocorrência (ex.: marcar quem abre a OS de retirada). Só com comentários ligados.
+  // Desligado por padrão: o sistema não marca ninguém sozinho (SGP_AVISOS_AUTOMATICOS=sim religa).
   async function avisosPendentes(dia) {
-    if (!comentarOcorrenciaSgp) return;
+    if (!comentarOcorrenciaSgp || !config.sgp.avisosAutomaticos) return;
     try {
       const n = await servico.enviarAvisosPendentes({
         repositorio: armazenamento.repositorio, cronograma, hoje: dia, comentar: comentarOcorrenciaSgp, destinatarios: { os: config.sgp.responsavelOs }, nomes: config.sgp.nomes,
@@ -152,6 +153,7 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     comentarOcorrenciaSgp,
     responsavelSgp: config.sgp.responsavelOcorrencia,
     supervisorSgp: config.sgp.supervisor,
+    responsavelOsSgp: config.sgp.responsavelOs,
     nomes: config.sgp.nomes,
     repositorio: armazenamento.repositorio,
     usuarios: armazenamento.usuarios,

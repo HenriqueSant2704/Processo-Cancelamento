@@ -74,29 +74,37 @@ test('print obrigatório no aviso: guarda, mostra na ficha e anexa na ocorrênci
   if (acao) assert.strictEqual((await chamar(`/api/tarefas/${acao.id}/concluir${d}`, { por: 'Jessica' })).status, 200);
 });
 
-test('anexo pela tela do SGP: multipart com os campos configurados e aviso de troca de senha', async () => {
+test('anexo pela tela do SGP: formulário em formset com dpb_token, vários arquivos num envio', async () => {
   const chamadas = [];
-  let pedeSenha = false;
+  let bloqueio = '';
   const buscar = async (url, op = {}) => {
     chamadas.push({ url, op });
     const cab = new Headers();
     if (url.endsWith('/accounts/login/') && !op.method) { cab.append('set-cookie', 'csrftoken=abc; Path=/'); return new Response('', { status: 200, headers: cab }); }
     if (url.endsWith('/accounts/login/')) { cab.append('set-cookie', 'sessionid=s1; Path=/'); return new Response(null, { status: 302, headers: cab }); }
-    cab.set('location', pedeSenha ? '/admin/cauth/password_change/' : '/admin/atendimento/ocorrencia/11423/edit/');
+    if (bloqueio) { cab.set('location', bloqueio); return new Response(null, { status: 302, headers: cab }); }
+    if (!op.method) return new Response("<form><input type='hidden' name='dpb_token' value='tok123' /></form>", { status: 200 });
+    cab.set('location', '/admin/atendimento/ocorrencia/11423/edit/');
     return new Response(null, { status: 302, headers: cab });
   };
   const sessao = criarSessaoWeb({ origem: 'https://sgp.exemplo', usuario: 'u', senha: 's', buscar });
-  await sessao.anexar({ ocorrenciaId: 11423, nome: 'p.png', tipo: 'image/png', dados: PNG, descricao: 'Print', campos: { arquivo: 'arquivo', descricao: 'descricao' } });
+  const r = await sessao.anexar({ ocorrenciaId: 11423, arquivos: [{ nome: 'a.png', tipo: 'image/png', dados: PNG, descricao: 'Print 1' }, { nome: 'b.pdf', tipo: 'application/pdf', dados: Buffer.from('%PDF-1') }] });
+  assert.deepStrictEqual(r, { ok: true, enviados: 2 });
   const envio = chamadas.at(-1);
   assert.strictEqual(envio.url, 'https://sgp.exemplo/admin/atendimento/ocorrencia/11423/anexo/add/');
-  assert.ok(envio.op.body instanceof FormData);
-  assert.strictEqual(envio.op.body.get('descricao'), 'Print');
-  assert.strictEqual(envio.op.body.get('csrfmiddlewaretoken'), 'abc');
-  assert.strictEqual(envio.op.body.get('arquivo').name, 'p.png');
-  pedeSenha = true;
+  const f = envio.op.body;
+  assert.strictEqual(f.get('dpb_token'), 'tok123');
+  assert.strictEqual(f.get('csrfmiddlewaretoken'), 'abc');
+  assert.strictEqual(f.get('anexos-TOTAL_FORMS'), '2');
+  assert.strictEqual(f.get('anexos-INITIAL_FORMS'), '0');
+  assert.strictEqual(f.get('anexos-0-arquivo').name, 'a.png');
+  assert.strictEqual(f.get('anexos-0-descricao'), 'Print 1');
+  assert.strictEqual(f.get('anexos-1-arquivo').name, 'b.pdf');
+  bloqueio = '/admin/cauth/password_change/';
   await assert.rejects(sessao.anexar({ ocorrenciaId: 1, nome: 'p.png', tipo: 'image/png', dados: PNG }), /trocar a senha/);
+  bloqueio = '/403/?perm_name=admcore.access_atendimento';
+  await assert.rejects(sessao.anexar({ ocorrenciaId: 1, nome: 'p.png', tipo: 'image/png', dados: PNG }), /permissão.*admcore.access_atendimento/);
 });
-
 test('negativar e retirar a negativação: só ficam feitos com arquivo (print ou PDF)', async (t) => {
   const { posicionar } = require('../src/cronograma/motor');
   const cronograma = carregarCronograma();

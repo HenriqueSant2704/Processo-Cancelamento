@@ -77,32 +77,55 @@ function criarSessaoWeb({ origem, usuario, senha, buscar = fetch, tempoLimiteMs 
   }
 
   // Anexo (print) na ocorrência pela tela do SGP:
-  //   POST {origem}/admin/atendimento/ocorrencia/{id}/anexo/add/  (multipart; sucesso = 302 de volta para a ocorrência)
-  // Os nomes dos campos vêm da configuração (campos.arquivo / campos.descricao) até confirmarmos no formulário.
-  async function anexar({ ocorrenciaId, nome, tipo, dados, descricao = '', campos = {} }) {
-    const campoArquivo = campos.arquivo || 'arquivo';
-    const campoDescricao = campos.descricao || 'descricao';
+  //   GET  {origem}/admin/atendimento/ocorrencia/{id}/anexo/add/  -> pega o dpb_token (evita envio duplicado)
+  //   POST a mesma página, multipart, no formato de "formset" do SGP (lido no formulário em 19/11/2026):
+  //     anexos-TOTAL_FORMS, anexos-INITIAL_FORMS=0, anexos-MIN_NUM_FORMS=0, anexos-MAX_NUM_FORMS=1000,
+  //     anexos-N-id (vazio), anexos-N-arquivo (arquivo), anexos-N-descricao (até 200), anexos-N-observacao
+  //   Sucesso = 302 para fora do /anexo/add/. Vários arquivos vão num envio só.
+  // arquivos: [{ nome, tipo, dados (Buffer), descricao }]. Aceita também um arquivo solto (formato antigo).
+  async function anexar({ ocorrenciaId, arquivos, nome, tipo, dados, descricao = '' }) {
+    const lista = Array.isArray(arquivos) && arquivos.length ? arquivos : [{ nome, tipo, dados, descricao }];
     const pagina = `${origem}/admin/atendimento/ocorrencia/${encodeURIComponent(ocorrenciaId)}/anexo/add/`;
+    const cabecalhos = () => ({ Cookie: cabecalhoCookie(cookies), Referer: pagina, Origin: origem });
+    const redirecionouPara = (r) => String(r.headers.get('location') || '');
+    const conferirBloqueio = (destino) => {
+      if (/password_change/.test(destino)) throw new ErroSgp('O SGP está pedindo para trocar a senha do usuário da integração. Entre no SGP com ele e troque a senha.');
+      if (/\/403\//.test(destino)) throw new ErroSgp(`O usuário da integração não tem permissão para anexar no SGP (${decodeURIComponent(destino.split('perm_name=')[1] || 'atendimento')}).`);
+    };
     for (let tentativa = 1; tentativa <= 2; tentativa++) {
       if (!logado) await entrar();
+      const formulario = await buscar(pagina, { redirect: 'manual', headers: cabecalhos(), signal: AbortSignal.timeout(tempoLimiteMs) });
+      lerCookies(formulario, cookies);
+      conferirBloqueio(redirecionouPara(formulario));
+      if (formulario.status !== 200) { if (tentativa === 1) { logado = false; continue; } throw new ErroSgp(`Não consegui abrir o formulário de anexo do SGP (HTTP ${formulario.status}).`); }
+      const html = await formulario.text();
+      const dpb = (html.match(/name=['"]dpb_token['"]\s+value=['"]([^'"]+)['"]/) || [])[1] || '';
       const form = new FormData();
       form.append('csrfmiddlewaretoken', cookies.get('csrftoken') || '');
-      if (campoDescricao) form.append(campoDescricao, descricao);
-      form.append(campoArquivo, new Blob([dados], { type: tipo }), nome);
+      if (dpb) form.append('dpb_token', dpb);
+      form.append('anexos-TOTAL_FORMS', String(lista.length));
+      form.append('anexos-INITIAL_FORMS', '0');
+      form.append('anexos-MIN_NUM_FORMS', '0');
+      form.append('anexos-MAX_NUM_FORMS', '1000');
+      lista.forEach((a, i) => {
+        form.append(`anexos-${i}-id`, '');
+        form.append(`anexos-${i}-arquivo`, new Blob([a.dados], { type: a.tipo }), a.nome);
+        form.append(`anexos-${i}-descricao`, String(a.descricao || '').slice(0, 200));
+        form.append(`anexos-${i}-observacao`, '');
+      });
       const r = await buscar(pagina, {
         method: 'POST',
         redirect: 'manual',
-        headers: { Cookie: cabecalhoCookie(cookies), Referer: pagina, Origin: origem, 'X-CSRFToken': cookies.get('csrftoken') || '' },
+        headers: { ...cabecalhos(), 'X-CSRFToken': cookies.get('csrftoken') || '' },
         body: form,
         signal: AbortSignal.timeout(tempoLimiteMs),
       });
       lerCookies(r, cookies);
-      const destino = String(r.headers.get('location') || '');
-      if (/password_change/.test(destino)) throw new ErroSgp('O SGP está pedindo para trocar a senha do usuário da integração. Entre no SGP com ele e troque a senha.');
+      const destino = redirecionouPara(r);
+      conferirBloqueio(destino);
       if ((/accounts\/login/.test(destino) || r.status === 403) && tentativa === 1) { logado = false; continue; }
-      // Formulário com erro volta 200 com a própria página; sucesso redireciona para fora do /anexo/add/.
-      if (r.status === 302 && destino && !/anexo\/add/.test(destino) && !/accounts\/login/.test(destino)) return { ok: true };
-      throw new ErroSgp(`O SGP não aceitou o anexo (HTTP ${r.status}). Confira os nomes dos campos do formulário.`);
+      if (r.status === 302 && destino && !/anexo\/add/.test(destino) && !/accounts\/login/.test(destino)) return { ok: true, enviados: lista.length };
+      throw new ErroSgp(`O SGP não aceitou o anexo (HTTP ${r.status}).`);
     }
     throw new ErroSgp('O SGP não aceitou o anexo mesmo após entrar de novo.');
   }

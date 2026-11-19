@@ -620,7 +620,7 @@
       if (t.status === 'cancelada' && !estado.verCanceladas) continue;
       if (t.etapa !== anterior) { itens.push(el('li', { class: 'lt-grupo' }, t.etapaNome)); anterior = t.etapa; }
       const atrasada = t.status === 'pendente' && t.data < hoje();
-      const sub = t.status === 'concluida' ? `Feito por ${t.concluidaPor} em ${dataCurta(t.concluidaEm)}` : t.status === 'cancelada' ? 'Não foi necessário' : atrasada ? 'Atrasada' : 'Previsto';
+      const sub = t.status === 'concluida' ? `Feito por ${t.concluidaPor} em ${dataCurta(t.concluidaEm)}` : t.status === 'cancelada' ? (t.concluidaEm ? `Desfeito no ajuste de etapa (tinha sido feito por ${t.concluidaPor || '—'} em ${dataCurta(t.concluidaEm)})` : 'Não foi necessário') : atrasada ? 'Atrasada' : 'Previsto';
       itens.push(el('li', { class: `lt-item ${t.status}${atrasada ? ' atrasada' : ''}` },
         el('span', { class: 'lt-ponto', html: t.status === 'concluida' ? ICONES.check : t.status === 'cancelada' ? ICONES.traco : '' }),
         el('div', { class: 'lt-corpo' },

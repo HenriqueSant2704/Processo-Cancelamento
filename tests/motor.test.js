@@ -180,3 +180,18 @@ test('aviso feito atrasado: os próximos são recalculados a partir do dia real'
   assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-19', '2026-11-23']); // 17 + 2 úteis = 19; 19 + 2 úteis = 23
   assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-24']);
 });
+
+test('ajustar etapa de novo não conta avisos em dobro (o que estava feito na etapa é desfeito)', () => {
+  const { criarProcesso, concluirTarefa, posicionar } = require('../src/cronograma/motor');
+  const { visaoProcesso } = require('../src/web/visao');
+  const cronograma = require('../src/config').carregarCronograma();
+  const p = criarProcesso({ id: '1', cliente: { id: '1', nome: 'C', contrato: '1' }, bloqueadoEm: '2026-11-10', inicio: '2026-11-17', cronograma });
+  for (const t of p.tarefas.filter((x) => x.tipo !== 'decisao').slice(0, 2)) concluirTarefa(p, t.id, { por: 'J', data: '2026-11-19' }, cronograma);
+  posicionar(p, { etapaId: 'notificacao-negativacao', contatosFeitos: 0, por: 'J', data: '2026-11-19' }, cronograma);
+  posicionar(p, { etapaId: 'notificacao-negativacao', contatosFeitos: 1, dataReferencia: '2026-11-19', por: 'J', data: '2026-11-19' }, cronograma);
+  posicionar(p, { etapaId: 'notificacao-negativacao', contatosFeitos: 1, dataReferencia: '2026-11-19', por: 'J', data: '2026-11-19' }, cronograma);
+  const v = visaoProcesso(p, '2026-11-19', cronograma);
+  assert.deepStrictEqual(v.contatos, { feitos: 1, total: 3 });
+  assert.strictEqual(v.passo.id, 'msg-2');
+  assert.strictEqual(p.tarefas.filter((t) => t.status === 'concluida' && t.tipo === 'contato').length, 1);
+});

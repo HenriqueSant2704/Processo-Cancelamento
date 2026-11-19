@@ -243,8 +243,13 @@ function posicionar(processo, { etapaId, contatosFeitos = 0, dataReferencia, por
     base = dataReferencia;
   }
 
+  // O ajuste refaz a etapa escolhida do zero: o que já estava feito NELA (e nas seguintes) é desfeito,
+  // senão os avisos contavam em dobro (ex.: "4 de 3") e a tela se perdia. Fica no cronograma como cancelado.
+  const ordemEtapas = cronograma.etapas.map((e) => e.id);
+  const desdeEtapa = ordemEtapas.indexOf(etapa.id);
   for (const t of processo.tarefas) {
     if (t.status === 'pendente') Object.assign(t, { status: 'cancelada', canceladaEm: data });
+    else if (t.status === 'concluida' && ordemEtapas.indexOf(t.etapa) >= desdeEtapa) Object.assign(t, { status: 'cancelada', canceladaEm: data, desfeitaNoAjuste: true });
   }
   const detalhe = etapa.tipo === 'contatos' ? ` · ${feitos} de ${etapa.tentativas} avisos já enviados${feitos ? ` (último em ${dataReferencia})` : ''}` : etapa.tipo === 'aguardo' ? ` · espera desde ${dataReferencia}` : '';
   registrar(processo, { data, por, evento: 'etapa-ajustada', detalhes: `Ajuste manual para "${etapa.nome}"${detalhe}${observacao ? ` | ${observacao}` : ''}` });

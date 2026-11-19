@@ -149,7 +149,8 @@
     $('#sino-total').hidden = !total;
     $('#sino-total').textContent = String(total);
     $('#sino').classList.toggle('tem', total > 0);
-    $('#sino-lista').replaceChildren(
+    // replaceChildren não abre listas: tudo vai num array "achatado" (senão aparece [object HTMLButtonElement]).
+    $('#sino-lista').replaceChildren(...[
       el('div', { class: 'sino-titulo' }, 'Teve retorno do cliente?'),
       retornos.length
         ? retornos.map((c) => {
@@ -166,7 +167,8 @@
             el('span', { class: `selo-mini aut-${n.status}` }, n.nome),
             el('strong', {}, titulo(n.cliente)),
             n.resposta && n.resposta.texto ? el('span', { class: 'sino-texto' }, `"${n.resposta.texto.slice(0, 140)}${n.resposta.texto.length > 140 ? '…' : ''}"`) : null))
-        : el('p', { class: 'suave sino-vazio' }, 'Nenhuma resposta nova.'));
+        : el('p', { class: 'suave sino-vazio' }, 'Nenhuma resposta nova.'),
+    ].flat());
     // Aviso do navegador quando surge uma pergunta nova (só se a Jéssica permitiu).
     const novos = retornos.map((c) => c.id).filter((id) => !(estado.jaAvisados || new Set()).has(id));
     estado.jaAvisados = new Set(retornos.map((c) => c.id));

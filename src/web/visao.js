@@ -108,6 +108,8 @@ function painel(processos, hoje, cronograma) {
       clientesHoje: visoes.filter((v) => v.paraHoje.length).length,
       ativos: ativos.length,
       regularizados: processos.filter((p) => p.resultado === 'regularizado').length,
+      aguardandoAutorizacao: ativos.filter((p) => p.autorizacao && p.autorizacao.status === 'aguardando').length,
+      autorizados: ativos.filter((p) => p.autorizacao && p.autorizacao.status === 'autorizado').length,
       valorAberto: Math.round(ativos.reduce((s, p) => s + ((p.financeiro && p.financeiro.valorAberto) || 0), 0) * 100) / 100,
       cancelados: processos.filter((p) => p.resultado === 'cancelado').length,
     },

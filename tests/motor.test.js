@@ -171,3 +171,12 @@ test('depois da retirada de equipamentos o processo segue para a negativação p
     assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-18', '2026-11-20', '2026-11-24']);
   }
 });
+
+test('aviso feito atrasado: os próximos são recalculados a partir do dia real', () => {
+  const p = novo('2026-11-16'); // avisos 16, 18, 20; pergunta 23
+  concluirTodas(p, 'acao', '2026-11-16');
+  const primeiro = pendentes(p, 'contato')[0];
+  concluirTarefa(p, primeiro.id, { por: 'Jessica', data: '2026-11-17' }, cronograma); // fez um dia depois
+  assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-19', '2026-11-23']); // 17 + 2 úteis = 19; 19 + 2 úteis = 23
+  assert.deepStrictEqual(datas(p, 'decisao'), ['2026-11-24']);
+});

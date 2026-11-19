@@ -170,6 +170,24 @@ function concluirTarefa(processo, tarefaId, { por, data, observacao, resposta },
 
   const etapa = obterEtapa(cronograma, tarefa.etapa);
 
+  // Aviso feito DEPOIS do dia marcado: os próximos avisos e a pergunta "regularizou?"
+  // são recalculados a partir do dia em que ele foi realmente feito.
+  if (tarefa.tipo === 'contato' && etapa.tipo === 'contatos' && data > tarefa.data) {
+    const feriados = cronograma.feriados || [];
+    const restantes = processo.tarefas
+      .filter((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo === 'contato')
+      .sort((a, b) => a.data.localeCompare(b.data));
+    let dia = adicionarDiasUteis(data, etapa.intervaloDiasUteis, feriados);
+    let ultimo = data;
+    for (const t of restantes) {
+      t.data = dia;
+      ultimo = dia;
+      dia = adicionarDiasUteis(dia, etapa.intervaloDiasUteis, feriados);
+    }
+    const pergunta = processo.tarefas.find((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo === 'decisao' && !t.promessa);
+    if (pergunta) pergunta.data = adicionarDiasUteis(ultimo, etapa.decisao.diasUteisAposUltimoContato || 0, feriados);
+  }
+
   if (tarefa.tipo === 'decisao') {
     for (const t of processo.tarefas) {
       if (t.etapa === etapa.id && t.status === 'pendente') {

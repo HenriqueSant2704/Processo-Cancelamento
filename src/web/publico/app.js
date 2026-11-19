@@ -164,14 +164,13 @@
   }
 
   // ---------- Vista "Hoje" ----------
-  const ABAS = [
-    { id: 'todos', nome: 'Todos', cor: null },
-    { id: 'atrasadas', nome: 'Atrasados', cor: 'var(--perigo)' },
-    { id: 'decisao', nome: 'Regularizou?', cor: 'var(--decisao)' },
-    { id: 'contato', nome: 'Contatos', cor: 'var(--contato)' },
-    { id: 'acao', nome: 'Ações SGP', cor: 'var(--acao)' },
-  ];
-  const passaAba = (t) => estado.aba === 'todos' || (estado.aba === 'atrasadas' ? t.atrasada : t.tipo === estado.aba);
+  // A fila é organizada por PASSO (ex.: "Notificação de negativação · 1ª mensagem"), para a Jéssica
+  // poder trabalhar um grupo de cada vez. "Atrasados" é um filtro à parte.
+  const ORDEM_PASSO = { 'msg-1': 1, 'msg-2': 2, 'msg-3': 3, promessa: 4, decisao: 5, espera: 6, acoes: 0 };
+  const chaveGrupo = (c) => (c.etapa ? `${c.etapa.id}:${c.passo ? c.passo.id : 'x'}` : 'outros');
+  const nomeGrupo = (c) => (c.etapa ? `${c.etapa.nome}${c.passo ? ` · ${c.passo.nome}` : ''}` : 'Outros');
+  const ordemGrupo = (c) => [c.faseIndice ?? 99, c.passo ? ORDEM_PASSO[c.passo.id] ?? 9 : 9];
+  const passaAba = (c) => estado.aba === 'todos' || (estado.aba === 'atrasadas' ? c.paraHoje.some((t) => t.atrasada) : chaveGrupo(c) === estado.aba);
 
   // Hoje: a fila do painel. Outro dia: a agenda daquele dia.
   const clientesBase = () => (estado.dia ? estado.agenda || [] : estado.painel.clientes);
@@ -180,7 +179,18 @@
     const termo = normalizar(estado.busca);
     return clientesBase()
       .filter((c) => !termo || normalizar(`${c.cliente.nome} ${c.cliente.contrato}`).includes(termo))
-      .filter((c) => c.paraHoje.some(passaAba));
+      .filter(passaAba);
+  }
+
+  // Grupos (passos) presentes na fila, na ordem do processo.
+  function gruposDaFila(base) {
+    const mapa = new Map();
+    for (const c of base) {
+      const k = chaveGrupo(c);
+      if (!mapa.has(k)) mapa.set(k, { id: k, nome: nomeGrupo(c), ordem: ordemGrupo(c), itens: [] });
+      mapa.get(k).itens.push(c);
+    }
+    return [...mapa.values()].sort((a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1] || a.nome.localeCompare(b.nome));
   }
 
   function desenharMetricas() {
@@ -193,17 +203,24 @@
     $('#metricas').replaceChildren(
       m({ cor: '--marca', rotulo: 'Para hoje', valor: r.paraHoje, detalhe: plural(r.clientesHoje, 'cliente', 'clientes') }),
       m({ cor: '--perigo', rotulo: 'Atrasadas', valor: r.atrasadas, detalhe: r.atrasadas ? 'de dias anteriores' : 'tudo em dia', aba: 'atrasadas' }),
-      m({ cor: '--decisao', rotulo: 'Regularizou?', valor: r.decisoes, detalhe: 'para responder', aba: 'decisao' }),
-      m({ cor: '--alerta', rotulo: 'Em aberto', valor: dinheiro(r.valorAberto || 0), detalhe: `${plural(r.regularizados, 'regularizado', 'regularizados')} · ${plural(r.cancelados, 'cancelado', 'cancelados')}` }),
+      m({ cor: '--alerta', rotulo: 'Aguardando autorização', valor: r.aguardandoAutorizacao || 0, detalhe: 'esperando o Lucas' }),
+      m({ cor: '--sucesso', rotulo: 'Autorizados', valor: r.autorizados || 0, detalhe: 'prontos para seguir' }),
     );
   }
 
   function desenharAbas() {
     const base = clientesBase();
-    const conta = (id) => (id === 'todos' ? base.length : base.filter((c) => c.paraHoje.some((t) => (id === 'atrasadas' ? t.atrasada : t.tipo === id))).length);
-    $('#abas').replaceChildren(...ABAS.map((a) => el('button', {
-      class: `aba${estado.aba === a.id ? ' ativa' : ''}`, role: 'tab', 'aria-selected': String(estado.aba === a.id), onclick: () => trocarAba(a.id),
-    }, a.cor ? el('i', { style: `background:${a.cor}` }) : null, a.nome, el('b', {}, String(conta(a.id))))));
+    const atrasados = base.filter((c) => c.paraHoje.some((t) => t.atrasada)).length;
+    const aba = (id, nome, n, cor) => el('button', {
+      class: `aba${estado.aba === id ? ' ativa' : ''}`, role: 'tab', 'aria-selected': String(estado.aba === id), onclick: () => trocarAba(id), title: nome,
+    }, cor ? el('i', { style: `background:${cor}` }) : null, nome, el('b', {}, String(n)));
+    $('#abas').replaceChildren(
+      aba('todos', 'Todos', base.length),
+      atrasados ? aba('atrasadas', 'Atrasados', atrasados, 'var(--perigo)') : null,
+      ...gruposDaFila(base).map((g) => aba(g.id, g.nome, g.itens.length)),
+    );
+    // Se o grupo escolhido sumiu (ex.: terminou), volta para "Todos".
+    if (estado.aba !== 'todos' && estado.aba !== 'atrasadas' && !gruposDaFila(base).some((g) => g.id === estado.aba)) estado.aba = 'todos';
   }
 
   function trocarAba(id) {
@@ -266,13 +283,10 @@
     desenharAbas();
     const lista = clientesVisiveis();
 
-    // Grupos por prioridade: atrasados, decisões, demais.
-    const grupos = [
-      { nome: 'Atrasados', itens: lista.filter((c) => c.paraHoje.some((t) => t.atrasada)) },
-      { nome: 'Responder "regularizou?"', itens: lista.filter((c) => !c.paraHoje.some((t) => t.atrasada) && c.paraHoje.some((t) => t.tipo === 'decisao')) },
-      { nome: estado.dia ? `Agendados para ${dataCurta(estado.dia)}` : 'Para hoje', itens: lista.filter((c) => !c.paraHoje.some((t) => t.atrasada || t.tipo === 'decisao')) },
-    ].filter((g) => g.itens.length);
-    for (const g of grupos) g.itens.sort((a, b) => b.diasBloqueado - a.diasBloqueado || a.cliente.nome.localeCompare(b.cliente.nome));
+    // Grupos por passo; dentro de cada um, atrasados primeiro e depois quem está há mais dias.
+    const grupos = gruposDaFila(lista);
+    const atrasado = (c) => (c.paraHoje.some((t) => t.atrasada) ? 0 : 1);
+    for (const g of grupos) g.itens.sort((x, y) => atrasado(x) - atrasado(y) || y.diasBloqueado - x.diasBloqueado || x.cliente.nome.localeCompare(y.cliente.nome));
 
     if (!lista.length) {
       const nada = !estado.painel.clientes.length;

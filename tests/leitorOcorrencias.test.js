@@ -56,3 +56,19 @@ test('posicionar pelo SGP: só avança, e só com --aplicar', async () => {
   assert.ok(depois.historico.some((h) => h.evento === 'etapa-ajustada' && /Lido nos comentários/.test(h.detalhes)));
   assert.strictEqual(sugerir(depois, [neg([c('jessica_rasteiro', '2026-11-06', REG)])], cronograma).acao, 'manter'); // nunca volta
 });
+
+test('suspenso sem ocorrência aberta: recomeça do início (abrir a ocorrência)', async () => {
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-03', inicio: '2026-11-04', cronograma });
+  for (const t of p.tarefas.filter((x) => x.tipo !== 'decisao').slice(0, 2)) Object.assign(t, { status: 'concluida', concluidaEm: t.data, concluidaPor: 'J' });
+  await repositorio.salvarProcesso(p);
+  const sgp = { ocorrenciasComComentarios: async () => new Map([['50', [neg([c('jessica_rasteiro', '2026-07-06', REG)], 1)]]]) };
+  const r = await posicionarPeloSgp({ sgp, repositorio, cronograma, hoje: '2026-11-19', aplicar: true });
+  assert.strictEqual(r[0].acao, 'recomecar');
+  const depois = await repositorio.obter('1');
+  const pend = depois.tarefas.filter((t) => t.status === 'pendente');
+  assert.ok(pend.some((t) => /Abrir ocorrência/.test(t.descricao)));
+  assert.strictEqual(depois.tarefas.filter((t) => t.tipo === 'contato' && t.status === 'concluida' && t.data >= '2026-11-19').length, 0);
+  // Já no começo e nada feito: não mexe de novo.
+  assert.strictEqual(sugerir(depois, [], cronograma).acao, 'sem-ciclo');
+});

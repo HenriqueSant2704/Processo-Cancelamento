@@ -145,7 +145,7 @@ async function executar(comando, args, values, armazenamento) {
       const nomeEtapa = (id) => (cronograma.etapas.find((e) => e.id === id) || {}).nome || id || '-';
       console.log('Lendo as ocorrências e os comentários no SGP...');
       const lista = await servico.posicionarPeloSgp({ sgp: criarFonteSgp(config, hoje), repositorio, cronograma, hoje, aplicar: Boolean(values.aplicar) });
-      const grupos = { avancar: 'AVANÇAR', conferir: 'CONFERIR (não mexo sozinho)', atras: 'SISTEMA À FRENTE DO SGP (não mexo)' };
+      const grupos = { avancar: 'AVANÇAR', recomecar: 'RECOMEÇAR DO INÍCIO (sem ocorrência aberta)', conferir: 'CONFERIR (não mexo sozinho)', atras: 'SISTEMA À FRENTE DO SGP (não mexo)' };
       for (const [acao, titulo] of Object.entries(grupos)) {
         const itens = lista.filter((x) => x.acao === acao);
         if (!itens.length) continue;
@@ -159,7 +159,7 @@ ${titulo}: ${itens.length}`);
       const n = (a) => lista.filter((x) => x.acao === a).length;
       console.log(`
 Já no passo certo: ${n('manter')} | Sem ocorrência aberta para ler: ${n('sem-ciclo')}`);
-      if (!values.aplicar && n('avancar')) console.log('Nada foi alterado. Para aplicar: npm run cli -- posicionar-pelo-sgp --aplicar');
+      if (!values.aplicar && (n('avancar') || n('recomecar'))) console.log('Nada foi alterado. Para aplicar: npm run cli -- posicionar-pelo-sgp --aplicar');
       return;
     }
     case 'migrar':

@@ -122,7 +122,21 @@ function sugerir(processo, ocorrencias, cronograma) {
   if (processo.status !== 'ativo') return null;
   const pos = (processo.fluxo || 'principal') === 'pos-cancelamento';
   const lido = pos ? lerPosCancelamento(ocorrencias, processo.ocorrencia && processo.ocorrencia.numero, cronograma) : lerCiclo(ocorrencias, cronograma);
-  if (!lido) return { acao: 'sem-ciclo', motivo: pos ? 'ocorrência pós-cancelamento não está aberta' : 'nenhuma ocorrência de negativação aberta no SGP' };
+  if (!lido && !pos) {
+    // Suspenso e sem ocorrência aberta: o ciclo antigo acabou (ocorrências fechadas). Recomeça do início,
+    // "abrir a ocorrência de notificação" (regra do Miguel, 19/11). Só nas fases antes do cancelamento.
+    const inicio = (cronograma.fluxos || []).find((f) => f.id === 'principal')?.inicio || cronograma.inicio;
+    const etapa = cronograma.etapas.find((e) => e.id === processo.etapaAtual);
+    const antesDoCancelamento = ['Notificação', 'Negativação', 'Negativado', 'Aviso de cancelamento'].includes(etapa && etapa.fase);
+    // Depois de um recomeço, só conta o que foi feito DEPOIS dele (senão recomeçaria todo dia).
+    const recomeco = [...(processo.historico || [])].reverse().find((h) => h.evento === 'etapa-ajustada' && /Recomeço/.test(h.detalhes || ''));
+    const andou = processo.etapaAtual !== inicio || processo.tarefas.some((t) => t.etapa === inicio && t.status === 'concluida' && (!recomeco || (t.concluidaEm || '') > recomeco.data));
+    if (antesDoCancelamento && andou) {
+      return { acao: 'recomecar', etapaId: inicio, contatosFeitos: 0, evidencias: ['nenhuma ocorrência de negativação ou cancelamento aberta no SGP: o ciclo anterior foi encerrado'], conferir: [] };
+    }
+    return { acao: 'sem-ciclo', motivo: 'nenhuma ocorrência de negativação aberta no SGP' };
+  }
+  if (!lido) return { acao: 'sem-ciclo', motivo: 'ocorrência pós-cancelamento não está aberta' };
   const ordem = cronograma.etapas.map((e) => e.id);
   const atual = processo.etapaAtual;
   const feitosAtual = processo.tarefas.filter((t) => t.etapa === atual && t.tipo === 'contato' && t.status === 'concluida').length;

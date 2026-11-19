@@ -207,15 +207,17 @@ async function posicionarPeloSgp({ sgp, repositorio, cronograma, hoje, aplicar =
   const resultado = [];
   for (const resumo of await repositorio.listar()) {
     if (resumo.status !== 'ativo') continue;
-    const s = sugerir(resumo, porContrato.get(String(resumo.cliente.contrato)) || [], cronograma);
+    let s = sugerir(resumo, porContrato.get(String(resumo.cliente.contrato)) || [], cronograma);
     if (!s) continue;
+    // Recomeço: confere de novo com o histórico completo (a lista não traz o histórico).
+    if (s.acao === 'recomecar') s = sugerir(await repositorio.obter(resumo.id), porContrato.get(String(resumo.cliente.contrato)) || [], cronograma) || s;
     const item = { id: resumo.id, cliente: resumo.cliente, etapaAtual: resumo.etapaAtual, ...s, aplicado: false };
-    if (aplicar && s.acao === 'avancar') {
+    if (aplicar && (s.acao === 'avancar' || s.acao === 'recomecar')) {
       const processo = await repositorio.obter(resumo.id);
       try {
         posicionar(processo, {
           etapaId: s.etapaId, contatosFeitos: s.contatosFeitos || 0, dataReferencia: s.dataReferencia, por, data: hoje,
-          observacao: `Lido nos comentários da ocorrência no SGP: ${s.evidencias.join('; ')}`,
+          observacao: `${s.acao === 'recomecar' ? 'Recomeço' : 'Lido nos comentários da ocorrência no SGP'}: ${s.evidencias.join('; ')}`,
         }, cronograma);
         // A autorização pendente era da etapa anterior: o SGP já mostra que o processo andou.
         if (processo.autorizacao && processo.autorizacao.status !== 'autorizado') processo.autorizacao = null;

@@ -124,3 +124,20 @@ test('negativar e retirar a negativação: só ficam feitos com arquivo (print o
   await new Promise((r2) => setTimeout(r2, 20));
   assert.strictEqual(anexados[0].nome, 'serasa.pdf');
 });
+
+test('vários arquivos de uma vez: todos ficam guardados na tarefa', async (t) => {
+  const cronograma = carregarCronograma();
+  const repositorio = new RepositorioJson(null);
+  const p = criarProcesso({ id: '1', cliente: { id: '50', nome: 'Cliente', contrato: '50' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  await repositorio.salvarProcesso(p);
+  const chamar = subir(t, { repositorio, printObrigatorio: true });
+  const aviso = p.tarefas.find((x) => x.tipo === 'contato');
+  const pdf = { nome: 'email.pdf', tipo: 'application/pdf', base64: Buffer.from('%PDF-1.4\n%fim').toString('base64') };
+  const r = await chamar(`/api/tarefas/${aviso.id}/concluir?data=2026-11-16`, { por: 'Jessica', observacao: 'Ligação e WhatsApp', registro: true, prints: [print, { ...print, nome: 'whatsapp.png' }, pdf] });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(r.json.anexos.map((a) => a.nome), ['conversa.png', 'whatsapp.png', 'email.pdf']);
+  assert.ok(r.json.anexos.every((a) => a.tarefaId === aviso.id));
+  const muitos = Array.from({ length: 9 }, () => print);
+  const outro = p.tarefas.filter((x) => x.tipo === 'contato')[1];
+  assert.strictEqual((await chamar(`/api/tarefas/${outro.id}/concluir?data=2026-11-16`, { por: 'Jessica', observacao: 'x', registro: true, prints: muitos })).status, 400);
+});

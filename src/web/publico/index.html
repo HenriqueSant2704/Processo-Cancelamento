@@ -171,11 +171,11 @@
         <textarea name="mensagem" rows="8" maxlength="3000"></textarea>
       </label>
       <div class="campo print-campo" id="mensagem-anexo" hidden>
-        <span>Arquivo da ação <em class="opcional">(obrigatório: print ou PDF, vai para a ocorrência)</em></span>
+        <span>Arquivos da ação <em class="opcional">(obrigatório pelo menos um: print ou PDF, vão para a ocorrência)</em></span>
         <label class="print-alvo" id="anexo-alvo" tabindex="0">
           <input type="file" name="anexo" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
           <img id="anexo-previa" alt="Prévia do arquivo" hidden>
-          <span id="anexo-dica">Clique para escolher o arquivo ou cole o print com Ctrl+V</span>
+          <span id="anexo-dica">Clique para escolher os arquivos ou cole o print com Ctrl+V (pode mais de um)</span>
         </label>
       </div>
       <div class="marcar-area"></div>
@@ -202,11 +202,11 @@
         <textarea name="texto" rows="3" maxlength="2000" required minlength="3" placeholder="Ex.: Disse que vai ver com o banco e retorna amanhã"></textarea>
       </label>
       <div class="campo print-campo">
-        <span>Prova do retorno <em class="opcional">(obrigatório: print da conversa ou PDF, vai para a ocorrência)</em></span>
+        <span>Provas do retorno <em class="opcional">(obrigatório pelo menos uma: print da conversa ou PDF, vão para a ocorrência)</em></span>
         <label class="print-alvo" id="retorno-alvo" tabindex="0">
           <input type="file" name="anexo" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
           <img id="retorno-previa" alt="Prévia da prova" hidden>
-          <span id="retorno-dica">Clique para escolher o arquivo ou cole o print com Ctrl+V</span>
+          <span id="retorno-dica">Clique para escolher os arquivos ou cole o print com Ctrl+V (pode mais de um)</span>
         </label>
       </div>
       <p class="efeito" id="retorno-efeito"></p>
@@ -296,11 +296,11 @@
         <textarea name="texto" rows="9" maxlength="3000" required></textarea>
       </label>
       <div class="campo print-campo">
-        <span>Print do aviso <em class="opcional" id="print-opcional">(opcional)</em></span>
+        <span>Prints do aviso <em class="opcional" id="print-opcional">(opcional)</em></span>
         <label class="print-alvo" id="print-alvo" tabindex="0">
           <input type="file" name="print" accept="image/png,image/jpeg,image/webp" hidden>
           <img id="print-previa" alt="Prévia do print" hidden>
-          <span id="print-dica">Clique para escolher a imagem ou cole com Ctrl+V</span>
+          <span id="print-dica">Clique para escolher os arquivos ou cole o print com Ctrl+V (pode mais de um)</span>
         </label>
       </div>
       <div class="janela-acoes">

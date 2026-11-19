@@ -12,6 +12,12 @@ const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo } = require('.
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 const { lerPrint } = require('../processos/prints');
+// Lista de arquivos do corpo: "prints" (vários) ou "print" (um, formato antigo). Até 8.
+const lerArquivos = (corpo) => {
+  const lista = Array.isArray(corpo.prints) ? corpo.prints : corpo.print ? [corpo.print] : [];
+  if (lista.length > 8) throw new Error('No máximo 8 arquivos por vez.');
+  return lista.map(lerPrint);
+};
 const { marcarEnviado, registrarChecagem } = require('../processos/retorno');
 const { modelosDoProcesso } = require('../processos/mensagens');
 
@@ -434,12 +440,12 @@ function criarApp(opcoes) {
       }
       // Aviso em dois passos: "Enviei" e, depois, "Teve retorno?" a cada X horas.
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/(enviado|retorno)$/))) {
-        const corpo = await lerCorpo(req, 6_000_000); // cabe a prova do retorno (até 4 MB)
+        const corpo = await lerCorpo(req, 45_000_000); // cabem até 8 provas de 4 MB (em base64)
         // Retorno do cliente: exige a prova (print ou PDF), quando o print obrigatório está ligado.
-        let prova = null;
+        let provas = [];
         if (m[2] === 'retorno' && corpo.resultado === 'retorno') {
-          if (corpo.print) { try { prova = lerPrint(corpo.print); } catch (erro) { throw new ErroHttp(400, erro.message); } }
-          else if (printObrigatorio) throw new ErroHttp(400, 'Anexe a prova do retorno (print da conversa ou PDF).');
+          try { provas = lerArquivos(corpo); } catch (erro) { throw new ErroHttp(400, erro.message); }
+          if (!provas.length && printObrigatorio) throw new ErroHttp(400, 'Anexe a prova do retorno (print da conversa ou PDF).');
         }
         const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
         const processo = await repositorio.obterPorTarefa(m[1]);
@@ -451,7 +457,7 @@ function criarApp(opcoes) {
           } else {
             const tarefa = registrarChecagem(processo, m[1], { por, agora: momento, data: hoje, resultado: corpo.resultado, texto: corpo.texto }, cronograma);
             await repositorio.salvarProcesso(processo);
-            if (prova && typeof repositorio.salvarAnexo === 'function') {
+            for (const prova of typeof repositorio.salvarAnexo === 'function' ? provas : []) {
               const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...prova, em: hoje, por });
               enviarPrint(processo, anexoId, prova, `Prova do retorno: ${tarefa.descricao}`);
             }
@@ -469,19 +475,18 @@ function criarApp(opcoes) {
         }
       }
       if (req.method === 'POST' && (m = url.pathname.match(/^\/api\/tarefas\/(\d+\.\d+)\/concluir$/))) {
-        const corpo = await lerCorpo(req, 6_000_000); // cabe o print do aviso (até 4 MB em base64)
+        const corpo = await lerCorpo(req, 45_000_000); // cabem até 8 arquivos de 4 MB (em base64)
         const texto = (v, max = 1000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
         await conferirPendente(m[1]);
         // Print do aviso: obrigatório para marcar um aviso (contato) como feito, quando ligado.
-        let print = null;
-        if (corpo.print) {
-          try { print = lerPrint(corpo.print); } catch (erro) { throw new ErroHttp(400, erro.message); }
-        } else if (printObrigatorio) {
+        let arquivos = [];
+        try { arquivos = lerArquivos(corpo); } catch (erro) { throw new ErroHttp(400, erro.message); }
+        if (!arquivos.length && printObrigatorio) {
           const p = await repositorio.obterPorTarefa(m[1]);
           const t = p && p.tarefas.find((x) => x.id === m[1]);
           if (t && t.tipo === 'contato' && t.status === 'pendente') throw new ErroHttp(400, 'Anexe o print do aviso para marcar como feito.');
         }
-        if (!print) {
+        if (!arquivos.length) {
           // Ações que exigem arquivo (ex.: negativar, retirar a negativação): sem anexo não fica feita.
           const p = await repositorio.obterPorTarefa(m[1]);
           const t = p && p.tarefas.find((x) => x.id === m[1]);
@@ -523,9 +528,9 @@ function criarApp(opcoes) {
               ? { tipo: 'decisao', resposta: tarefa.resposta, promessa: Boolean(tarefa.promessa), por: tarefa.concluidaPor, data: hoje, observacao: tarefa.observacao, mensagem, marcar, titulo: tarefa.resposta === 'sim' ? 'Cliente regularizado' : 'Atualização do cliente' }
               : eventoTarefa);
           }
-          if (print && typeof repositorio.salvarAnexo === 'function') {
-            const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...print, em: hoje, por: tarefa.concluidaPor });
-            enviarPrint(processo, anexoId, print, `${print.tipo === 'application/pdf' ? 'Arquivo' : 'Print'}: ${tarefa.descricao}`);
+          for (const arq of typeof repositorio.salvarAnexo === 'function' ? arquivos : []) {
+            const anexoId = await repositorio.salvarAnexo({ processoId: processo.id, tarefaId: tarefa.id, ...arq, em: hoje, por: tarefa.concluidaPor });
+            enviarPrint(processo, anexoId, arq, `${arq.tipo === 'application/pdf' ? 'Arquivo' : 'Print'}: ${tarefa.descricao}`);
           }
           return responderJson(res, 200, await detalhe(processo, hoje));
         } catch (erro) {

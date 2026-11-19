@@ -794,32 +794,67 @@
   }
   const marcadosEm = (form) => [...form.querySelectorAll('input[name=marcar]:checked')].map((i) => i.value);
 
-  // ---------- Mensagem pronta (ação feita, pedido ao Lucas) ----------
-  let mensagemAtual = null; // { aoEnviar(mensagem, marcar, arquivo), anexo, arquivo }
-  // Arquivo da ação (print ou PDF), escolhido ou colado. Fica em mensagemAtual.arquivo.
-  function usarAnexo(arquivo) {
-    if (!arquivo || !mensagemAtual) return;
-    if (!['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(arquivo.type)) { avisar('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.', 'erro'); return; }
-    if (arquivo.size > 4 * 1024 * 1024) { avisar('O arquivo passou de 4 MB.', 'erro'); return; }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      mensagemAtual.arquivo = { nome: arquivo.name || (arquivo.type === 'application/pdf' ? 'arquivo.pdf' : 'print.png'), tipo: arquivo.type, base64: String(leitor.result) };
-      const pdf = arquivo.type === 'application/pdf';
-      $('#anexo-previa').hidden = pdf;
-      if (!pdf) $('#anexo-previa').src = mensagemAtual.arquivo.base64;
-      $('#anexo-dica').textContent = pdf ? `PDF: ${mensagemAtual.arquivo.nome} (clique para trocar)` : 'Clique ou cole outro para trocar';
-    };
-    leitor.readAsDataURL(arquivo);
+  // ---------- Arquivos anexados (vários por vez) ----------
+  // Cada janela tem sua lista: registro (aviso), mensagem (ação com arquivo) e retorno (prova do retorno).
+  const ARQUIVOS = {
+    registro: { lista: [], alvo: '#print-alvo', previa: '#print-previa', dica: '#print-dica' },
+    mensagem: { lista: [], alvo: '#anexo-alvo', previa: '#anexo-previa', dica: '#anexo-dica' },
+    retorno: { lista: [], alvo: '#retorno-alvo', previa: '#retorno-previa', dica: '#retorno-dica' },
+  };
+  const TIPOS_ARQUIVO = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+  const MAX_ARQUIVOS = 8;
+  function desenharArquivos(chave) {
+    const a = ARQUIVOS[chave];
+    $(a.previa).hidden = true;
+    $(a.dica).textContent = a.lista.length
+      ? `${plural(a.lista.length, 'arquivo anexado', 'arquivos anexados')} · clique ou cole com Ctrl+V para adicionar mais`
+      : 'Clique para escolher os arquivos ou cole o print com Ctrl+V (pode mais de um)';
+    let caixa = $(a.alvo).parentElement.querySelector('.arquivos-lista');
+    if (!caixa) { caixa = el('div', { class: 'arquivos-lista' }); $(a.alvo).after(caixa); }
+    caixa.replaceChildren(...a.lista.map((arq, i) => el('div', { class: 'arquivo-item', title: arq.nome },
+      arq.tipo === 'application/pdf' ? el('span', { class: 'lt-pdf' }, 'PDF') : el('img', { src: arq.base64, alt: arq.nome }),
+      el('span', { class: 'arquivo-nome' }, arq.nome),
+      el('button', { type: 'button', class: 'arquivo-remover', title: 'Tirar este arquivo', 'aria-label': `Tirar ${arq.nome}`, onclick: () => { a.lista.splice(i, 1); desenharArquivos(chave); }, html: ICONES.x }))));
   }
+  function limparArquivos(chave) { ARQUIVOS[chave].lista = []; desenharArquivos(chave); }
+  function adicionarArquivos(chave, arquivos) {
+    const a = ARQUIVOS[chave];
+    for (const arquivo of arquivos) {
+      if (!arquivo) continue;
+      if (!TIPOS_ARQUIVO.includes(arquivo.type)) { avisar('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.', 'erro'); continue; }
+      if (arquivo.size > 4 * 1024 * 1024) { avisar(`O arquivo ${arquivo.name || ''} passou de 4 MB.`, 'erro'); continue; }
+      if (a.lista.length >= MAX_ARQUIVOS) { avisar(`No máximo ${MAX_ARQUIVOS} arquivos por vez.`, 'erro'); break; }
+      const leitor = new FileReader();
+      leitor.onload = () => {
+        const n = a.lista.length + 1;
+        a.lista.push({ nome: arquivo.name && arquivo.name !== 'image.png' ? arquivo.name : (arquivo.type === 'application/pdf' ? `arquivo-${n}.pdf` : `print-${n}.png`), tipo: arquivo.type, base64: String(leitor.result) });
+        desenharArquivos(chave);
+      };
+      leitor.readAsDataURL(arquivo);
+    }
+  }
+  // Liga escolher (vários), colar (Ctrl+V) e teclado de uma janela à sua lista.
+  function ligarArquivos(chave, input, janela) {
+    input.multiple = true;
+    input.accept = TIPOS_ARQUIVO.join(',');
+    input.addEventListener('change', (e) => { adicionarArquivos(chave, [...e.target.files]); e.target.value = ''; });
+    $(ARQUIVOS[chave].alvo).addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    janela.addEventListener('paste', (e) => {
+      if (chave === 'mensagem' && (!mensagemAtual || !mensagemAtual.anexo)) return;
+      const arquivos = [...(e.clipboardData ? e.clipboardData.items : [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile());
+      if (arquivos.length) { e.preventDefault(); adicionarArquivos(chave, arquivos); }
+    });
+  }
+
+  // ---------- Mensagem pronta (ação feita, pedido ao Lucas) ----------
+  let mensagemAtual = null; // { aoEnviar(mensagem, marcar, arquivos), anexo }
   function abrirMensagem({ d, titulo: tituloJanela, texto, botao = 'Salvar', aoEnviar, anexo = false }) {
     if (!garantirUsuario()) return;
     const f = $('#form-mensagem');
     f.reset();
-    mensagemAtual = { aoEnviar, anexo, arquivo: null };
+    mensagemAtual = { aoEnviar, anexo };
     $('#mensagem-anexo').hidden = !anexo;
-    $('#anexo-previa').hidden = true;
-    $('#anexo-previa').removeAttribute('src');
-    $('#anexo-dica').textContent = 'Clique para escolher o arquivo ou cole o print com Ctrl+V';
+    limparArquivos('mensagem');
     $('#mensagem-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#mensagem-titulo').textContent = tituloJanela;
     $('#mensagem-confirmar').textContent = botao;
@@ -831,11 +866,11 @@
   async function enviarMensagem(e) {
     e.preventDefault();
     const f = e.currentTarget;
-    if (mensagemAtual.anexo && !mensagemAtual.arquivo) { avisar('Anexe o arquivo (print ou PDF) antes de marcar como feito.', 'erro'); $('#anexo-alvo').focus(); return; }
+    if (mensagemAtual.anexo && !ARQUIVOS.mensagem.lista.length) { avisar('Anexe o arquivo (print ou PDF) antes de marcar como feito.', 'erro'); $('#anexo-alvo').focus(); return; }
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await mensagemAtual.aoEnviar(f.mensagem.value, marcadosEm(f), mensagemAtual.arquivo);
+      await mensagemAtual.aoEnviar(f.mensagem.value, marcadosEm(f), [...ARQUIVOS.mensagem.lista]);
       $('#janela-mensagem').close();
     } catch (erro) {
       avisar(erro.message, 'erro');
@@ -852,9 +887,9 @@
       texto: (d.modelos || {})[ultima.id] || '',
       botao: 'Marcar como feito',
       anexo: Boolean(ultima.anexoObrigatorio),
-      aoEnviar: async (mensagem, marcar, arquivo) => {
+      aoEnviar: async (mensagem, marcar, arquivos) => {
         for (const t of tarefas) {
-          const extra = t === ultima ? { mensagem, marcar, print: arquivo || undefined } : {};
+          const extra = t === ultima ? { mensagem, marcar, prints: arquivos && arquivos.length ? arquivos : undefined } : {};
           await api(`/api/tarefas/${t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, ...extra }) });
         }
         avisar(tarefas.length > 1 ? `${tarefas.length} tarefas concluídas` : 'Tarefa concluída');
@@ -902,28 +937,10 @@
     f.reset();
     $('#retorno-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#retorno-quando').textContent = `${t.descricao}, enviado às ${horaDe(t.retorno.enviadoEm)}.`;
-    retornoAtual.arquivo = null;
-    $('#retorno-previa').hidden = true;
-    $('#retorno-previa').removeAttribute('src');
-    $('#retorno-dica').textContent = 'Clique para escolher o arquivo ou cole o print com Ctrl+V';
+    limparArquivos('retorno');
     prepararMarcar(f);
     efeitoRetorno();
     $('#janela-retorno').showModal();
-  }
-  // Prova do retorno (print ou PDF), escolhida ou colada.
-  function usarProvaRetorno(arquivo) {
-    if (!arquivo || !retornoAtual) return;
-    if (!['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(arquivo.type)) { avisar('O arquivo precisa ser uma imagem (PNG, JPG ou WEBP) ou um PDF.', 'erro'); return; }
-    if (arquivo.size > 4 * 1024 * 1024) { avisar('O arquivo passou de 4 MB.', 'erro'); return; }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      retornoAtual.arquivo = { nome: arquivo.name || (arquivo.type === 'application/pdf' ? 'retorno.pdf' : 'retorno.png'), tipo: arquivo.type, base64: String(leitor.result) };
-      const pdf = arquivo.type === 'application/pdf';
-      $('#retorno-previa').hidden = pdf;
-      if (!pdf) $('#retorno-previa').src = retornoAtual.arquivo.base64;
-      $('#retorno-dica').textContent = pdf ? `PDF: ${retornoAtual.arquivo.nome} (clique para trocar)` : 'Clique ou cole outro para trocar';
-    };
-    leitor.readAsDataURL(arquivo);
   }
   function efeitoRetorno() {
     const tipo = $('#form-retorno').tipo.value;
@@ -938,14 +955,14 @@
     const f = e.currentTarget;
     if (!f.reportValidity()) return;
     const { d, t } = retornoAtual;
-    if (!retornoAtual.arquivo) { avisar('Anexe a prova do retorno (print da conversa ou PDF).', 'erro'); $('#retorno-alvo').focus(); return; }
+    if (!ARQUIVOS.retorno.lista.length) { avisar('Anexe a prova do retorno (print da conversa ou PDF).', 'erro'); $('#retorno-alvo').focus(); return; }
     const tipo = f.tipo.value;
     const rotulo = { regularizou: 'Regularizou', promessa: 'Fez promessa', outro: 'Retorno' }[tipo];
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
       // Todo retorno fica registrado com o texto e a prova; depois abre o próximo passo, se houver.
-      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: `${rotulo}: ${f.texto.value}`, print: retornoAtual.arquivo, marcar: marcadosEm(f) }) });
+      await api(`/api/tarefas/${t.id}/retorno`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, resultado: 'retorno', texto: `${rotulo}: ${f.texto.value}`, prints: [...ARQUIVOS.retorno.lista], marcar: marcadosEm(f) }) });
       const texto = f.texto.value;
       $('#janela-retorno').close();
       const atual = await api(`/api/processos/${d.id}`);
@@ -1023,27 +1040,6 @@
   }
 
   // Print do aviso: escolhido no arquivo ou colado (Ctrl+V). Vai em base64 junto com o registro.
-  let printAtual = null; // { nome, tipo, base64 }
-  function limparPrint() {
-    printAtual = null;
-    $('#print-previa').hidden = true;
-    $('#print-previa').removeAttribute('src');
-    $('#print-dica').textContent = 'Clique para escolher a imagem ou cole com Ctrl+V';
-  }
-  function usarPrint(arquivo) {
-    if (!arquivo) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(arquivo.type)) { avisar('O print precisa ser uma imagem PNG, JPG ou WEBP.', 'erro'); return; }
-    if (arquivo.size > 4 * 1024 * 1024) { avisar('O print passou de 4 MB. Recorte só a parte da conversa.', 'erro'); return; }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      printAtual = { nome: arquivo.name || 'print.png', tipo: arquivo.type, base64: String(leitor.result) };
-      $('#print-previa').src = printAtual.base64;
-      $('#print-previa').hidden = false;
-      $('#print-dica').textContent = 'Clique ou cole outro para trocar';
-    };
-    leitor.readAsDataURL(arquivo);
-  }
-
   function abrirRegistro(d, t) {
     if (!garantirUsuario()) return;
     const f = $('#form-registro');
@@ -1059,7 +1055,7 @@
     $('#registro-cliente').textContent = `${titulo(d.cliente.nome)} · contrato #${d.cliente.contrato}`;
     $('#registro-titulo').textContent = t.descricao;
     f.texto.value = montarTextoRegistro(f);
-    limparPrint();
+    limparArquivos('registro');
     prepararMarcar(f);
     $('#print-opcional').textContent = estado.printObrigatorio ? '(obrigatório)' : '(opcional)';
     $('#janela-registro').showModal();
@@ -1075,11 +1071,11 @@
     e.preventDefault();
     const f = e.currentTarget;
     if (!f.reportValidity()) return;
-    if (estado.printObrigatorio && !printAtual) { avisar('Anexe o print do aviso antes de salvar.', 'erro'); $('#print-alvo').focus(); return; }
+    if (estado.printObrigatorio && !ARQUIVOS.registro.lista.length) { avisar('Anexe o print do aviso antes de salvar.', 'erro'); $('#print-alvo').focus(); return; }
     const botao = f.querySelector('[type=submit]');
     botao.disabled = true;
     try {
-      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true, print: printAtual || undefined, marcar: marcadosEm(f) }) });
+      await api(`/api/tarefas/${registroAtual.t.id}/concluir`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, observacao: f.texto.value, registro: true, prints: ARQUIVOS.registro.lista.length ? [...ARQUIVOS.registro.lista] : undefined, marcar: marcadosEm(f) }) });
       $('#janela-registro').close();
       avisar('Aviso registrado');
       await aposAcao();
@@ -1405,12 +1401,7 @@
   $('#form-promessa').addEventListener('submit', enviarPromessa);
   $('#funil-topo').addEventListener('click', () => trocarVista('etapas'));
   $('#form-retorno').addEventListener('submit', enviarRetorno);
-  $('#form-retorno').anexo.addEventListener('change', (e) => { usarProvaRetorno(e.target.files[0]); e.target.value = ''; });
-  $('#retorno-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-retorno').anexo.click(); } });
-  $('#janela-retorno').addEventListener('paste', (e) => {
-    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file');
-    if (item) { e.preventDefault(); usarProvaRetorno(item.getAsFile()); }
-  });
+  ligarArquivos('retorno', $('#form-retorno').anexo, $('#janela-retorno'));
   $('#form-retorno').addEventListener('change', efeitoRetorno);
   $('#retorno-cancelar').addEventListener('click', () => $('#janela-retorno').close());
   $('#filtro-passo').addEventListener('change', (e) => trocarAba(e.target.value));
@@ -1418,12 +1409,7 @@
   document.addEventListener('click', (e) => { if (!e.target.closest('.sino-area')) alternarSino(false); });
   $('#form-registro').addEventListener('submit', enviarRegistro);
   $('#form-registro').addEventListener('input', (e) => { if (e.target.name !== 'print') aoMudarRegistro(e); });
-  $('#form-registro').print.addEventListener('change', (e) => { usarPrint(e.target.files[0]); e.target.value = ''; });
-  $('#print-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-registro').print.click(); } });
-  $('#janela-registro').addEventListener('paste', (e) => {
-    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'));
-    if (item) { e.preventDefault(); usarPrint(item.getAsFile()); }
-  });
+  ligarArquivos('registro', $('#form-registro').print, $('#janela-registro'));
   $('#form-registro').addEventListener('change', (e) => { if (e.target.name !== 'print') aoMudarRegistro(e); });
   $('#registro-cancelar').addEventListener('click', () => $('#janela-registro').close());
   $('#form-anotacao').addEventListener('submit', enviarAnotacao);
@@ -1440,13 +1426,7 @@
   // Ao fechar uma janela, some o erro que ficou nela.
   document.querySelectorAll('dialog').forEach((dlg) => dlg.addEventListener('close', () => dlg.querySelectorAll('.janela-erro').forEach((x) => x.remove())));
   $('#form-mensagem').addEventListener('submit', enviarMensagem);
-  $('#form-mensagem').anexo.addEventListener('change', (e) => { usarAnexo(e.target.files[0]); e.target.value = ''; });
-  $('#anexo-alvo').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#form-mensagem').anexo.click(); } });
-  $('#janela-mensagem').addEventListener('paste', (e) => {
-    if (!mensagemAtual || !mensagemAtual.anexo) return;
-    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.kind === 'file');
-    if (item) { e.preventDefault(); usarAnexo(item.getAsFile()); }
-  });
+  ligarArquivos('mensagem', $('#form-mensagem').anexo, $('#janela-mensagem'));
   $('#mensagem-cancelar').addEventListener('click', () => $('#janela-mensagem').close());
   $('#form-promessa').addEventListener('input', (e) => {
     const f = e.currentTarget;

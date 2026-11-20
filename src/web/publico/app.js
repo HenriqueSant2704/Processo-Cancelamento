@@ -135,7 +135,8 @@
 
   // ---------- Carregar ----------
   async function carregarPainel() {
-    estado.painel = await api('/api/painel');
+    // Cada pessoa tem o seu sino (o que a Jéssica não viu continua aparecendo para ela).
+    estado.painel = await api(`/api/painel${estado.usuario ? `?para=${encodeURIComponent(estado.usuario)}` : ''}`);
     desenharTopo();
     desenharHoje();
     desenharSino();
@@ -161,14 +162,16 @@
               el('span', { class: 'sino-texto' }, `${t.descricao} · enviado às ${horaDe(t.retorno.enviadoEm)}`));
           })
         : el('p', { class: 'suave sino-vazio' }, 'Nenhum aviso esperando pergunta agora.'),
-      el('div', { class: 'sino-titulo' }, 'Respostas do Lucas'),
+      el('div', { class: 'sino-titulo sino-titulo-acao' }, el('span', {}, 'Respostas do Lucas'),
+        estado.painel.leituraLucas ? el('button', { class: 'botao pequeno fantasma', type: 'button', title: textoLeituraLucas(), onclick: (e) => { e.stopPropagation(); verificarLucasAgora(e.currentTarget); } }, 'Verificar agora') : null),
       lucas.length
         ? lucas.map((n) => el('button', { class: `sino-item aut-${n.status}`, onclick: () => abrirNotificacao(n) },
             el('span', { class: `selo-mini aut-${n.status}` }, n.nome),
             el('strong', {}, titulo(n.cliente)),
             n.resposta && n.resposta.texto ? el('span', { class: 'sino-texto' }, `"${n.resposta.texto.slice(0, 140)}${n.resposta.texto.length > 140 ? '…' : ''}"`) : null))
         : el('p', { class: 'suave sino-vazio' }, 'Nenhuma resposta nova.'),
-    ].flat());
+      estado.painel.leituraLucas ? el('p', { class: 'suave sino-vazio' }, textoLeituraLucas()) : null,
+    ].flat().filter(Boolean));
     // Aviso do navegador quando surge uma pergunta nova (só se a Jéssica permitiu).
     const novos = retornos.map((c) => c.id).filter((id) => !(estado.jaAvisados || new Set()).has(id));
     estado.jaAvisados = new Set(retornos.map((c) => c.id));
@@ -176,6 +179,30 @@
       try { new Notification('Têmis · teve retorno?', { body: `${plural(novos.length, 'cliente', 'clientes')} esperando você perguntar se respondeu ao aviso.`, tag: 'temis-retorno' }); } catch { /* sem notificação */ }
     }
     estado.notificouUmaVez = true;
+  }
+
+  function textoLeituraLucas() {
+    const l = estado.painel.leituraLucas;
+    if (!l) return '';
+    if (l.emAndamento) return 'Lendo as ocorrências no SGP...';
+    if (!l.ultima) return 'Primeira leitura das ocorrências em instantes.';
+    if (!l.ultima.ok) return `Última leitura no SGP falhou: ${l.ultima.erro}`;
+    return `Ocorrências lidas no SGP às ${horaDe(l.ultima.em)}.`;
+  }
+  async function verificarLucasAgora(botao) {
+    botao.disabled = true;
+    botao.textContent = 'Lendo...';
+    try {
+      const r = await api('/api/lucas/ler', { method: 'POST' });
+      const n = (r.respostas || 0) + (r.comentarios || 0);
+      avisar(r.ok === false ? `Não consegui ler o SGP: ${r.erro}` : n ? `${n === 1 ? 'Achei 1 novidade do Lucas' : `Achei ${n} novidades do Lucas`}` : 'Nada novo do Lucas nas ocorrências', r.ok === false ? 'erro' : '');
+      await carregarPainel();
+      alternarSino(true);
+    } catch (erro) {
+      avisar(erro.message, 'erro');
+      botao.disabled = false;
+      botao.textContent = 'Verificar agora';
+    }
   }
 
   function alternarSino(abrir) {
@@ -559,7 +586,7 @@
     if (!a || d.status !== 'ativo') return null;
     if (a.status === 'autorizado' && !d.paraHoje.some((t) => t.etapa === a.etapa)) return null;
     // Abriu a ficha: a resposta do Lucas foi vista (some do sino).
-    if (a.visto === false) api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: 'visto' }) }).then(() => carregarPainel()).catch(() => {});
+    if (a.visto === false && !(a.vistoPor || []).includes(estado.usuario)) api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: 'visto' }) }).then(() => carregarPainel()).catch(() => {});
     const textos = {
       aguardando: `O cliente não regularizou em "${a.etapaAnteriorNome}". O Lucas foi perguntado na ocorrência se pode seguir para "${a.etapaNome}". A etapa só começa depois da resposta dele.`,
       negado: `O Lucas não autorizou seguir para "${a.etapaNome}". O cliente continua parado aqui.`,
@@ -575,6 +602,17 @@
         acao('autorizar', a.status === 'aguardando' ? 'Lucas autorizou por fora' : 'Está autorizado', 'sim', 'Como o Lucas autorizou? (opcional)'),
         a.status === 'respondido' ? acao('negar', 'Não autorizou', 'nao', 'Observação (opcional)') : null,
         a.status !== 'aguardando' ? acao('pedir', 'Pedir de novo ao Lucas', 'fantasma', 'Mensagem para o Lucas (opcional)') : null) : null);
+  }
+  // Último comentário do Lucas lido na ocorrência (quando não é resposta a um pedido de autorização).
+  function cartaoLucas(d) {
+    const s = d.supervisor;
+    if (!s || !s.ultimo || d.status !== 'ativo') return null;
+    if (d.autorizacao && d.autorizacao.resposta && d.autorizacao.resposta.texto === s.ultimo.texto) return null;
+    const novo = !(s.vistoPor || []).includes(estado.usuario);
+    if (novo && estado.usuario) api(`/api/processos/${d.id}/autorizacao`, { method: 'POST', body: JSON.stringify({ por: estado.usuario, acao: 'visto' }) }).then(() => carregarPainel()).catch(() => {});
+    return el('section', { class: 'cartao-aut aut-comentou' },
+      el('div', { class: 'cartao-aut-topo' }, el('span', { class: 'selo-mini aut-comentou' }, 'Lucas comentou na ocorrência'), s.avisadoEm ? el('small', {}, `Lido em ${dataCurta(s.avisadoEm)}`) : null),
+      el('blockquote', {}, s.ultimo.texto, el('cite', {}, `${s.ultimo.por === 'admin' ? 'Lucas' : s.ultimo.por || ''}${s.ultimo.em ? ` · ${dataCurta(String(s.ultimo.em).slice(0, 10))}` : ''}`)));
   }
   async function responderAutorizacao(d, acaoNome, pergunta, botao) {
     if (!garantirUsuario()) return;
@@ -675,6 +713,7 @@
             d.paraHoje.map((t) => linhaTarefa(d, t)),
             simples.length > 1 ? el('button', { class: 'botao fantasma pequeno botao-todas', onclick: () => feitoComMensagem(d, simples) }, ico('checks'), `Marcar as ${simples.length} ações como feitas`) : null)) : null,
         cartaoAutorizacao(d),
+        cartaoLucas(d),
         numeros,
         el('section', {}, el('div', { class: 'secao-titulo' }, el('span', {}, 'Etapas do processo')), etapas),
         el('div', { class: 'ficha-colunas' },

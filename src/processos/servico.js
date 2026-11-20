@@ -178,22 +178,69 @@ async function vincularOcorrencias({ sgp, repositorio, porContrato: lido }) {
   return ligados;
 }
 
-// Lê, nas ocorrências, a resposta do supervisor para os clientes que aguardam autorização.
-// Devolve os processos que mudaram (para avisar a Jéssica e comentar o início da etapa).
-async function lerAutorizacoes({ sgp, repositorio, cronograma, hoje, supervisor, usuarioSistema }) {
-  const { acharResposta, classificarResposta, aplicarResposta } = require('./autorizacao');
-  if (!supervisor || typeof sgp.comentariosDaOcorrencia !== 'function') return [];
+// Lê os comentários do supervisor (Lucas) nas ocorrências dos clientes ativos.
+//  - Cliente parado esperando autorização: a resposta dele libera (ou não) SÓ aquele cliente.
+//  - Qualquer outro cliente: um comentário novo dele vira aviso no sino ("Lucas comentou").
+// todos=false lê só os clientes parados (leitura rápida). Devolve os processos cuja autorização mudou
+// (para comentar o início da etapa) e, em .comentarios, os que só ganharam aviso de comentário.
+async function lerAutorizacoes({ sgp, repositorio, cronograma, hoje, supervisor, usuarioSistema, todos = true }) {
+  const { acharResposta, classificarResposta, aplicarResposta, bloqueada, ehDoSupervisor, chaveComentario, textoPuro } = require('./autorizacao');
+  const { adicionarDias } = require('../utils/datas');
   const mudaram = [];
+  mudaram.comentarios = [];
+  mudaram.lidos = 0;
+  mudaram.erros = [];
+  if (!supervisor || typeof sgp.comentariosDaOcorrencia !== 'function') return mudaram;
+  // Na primeira leitura de um cliente, só avisa comentários dos últimos dias (não inunda o sino com coisa antiga).
+  const recente = adicionarDias(hoje, -3);
   for (const resumo of await repositorio.listar()) {
-    if (resumo.status !== 'ativo' || !resumo.autorizacao || resumo.autorizacao.status !== 'aguardando') continue;
-    if (!resumo.ocorrencia || !resumo.ocorrencia.numero) continue;
-    const resposta = acharResposta(await sgp.comentariosDaOcorrencia(resumo.ocorrencia.numero), { supervisor, usuarioSistema, pedidoEm: resumo.autorizacao.pedidoEm });
-    if (!resposta) continue;
+    if (resumo.status !== 'ativo' || !resumo.ocorrencia || !resumo.ocorrencia.numero) continue;
+    if (!todos && !bloqueada(resumo)) continue;
+    let comentarios;
+    try {
+      comentarios = await sgp.comentariosDaOcorrencia(resumo.ocorrencia.numero);
+    } catch (erro) {
+      mudaram.erros.push(`${resumo.cliente.nome}: ${erro.message}`);
+      continue;
+    }
+    mudaram.lidos++;
+    const doSupervisor = (comentarios || []).filter((c) => ehDoSupervisor(c, supervisor) && textoPuro(c.comentario));
+    const jaLidos = new Set((resumo.supervisor && resumo.supervisor.lidos) || []);
+    const novos = doSupervisor.filter((c) => !jaLidos.has(chaveComentario(c)));
+    if (!novos.length) continue;
+
     const processo = await repositorio.obter(resumo.id);
-    if (!processo.autorizacao || processo.autorizacao.status !== 'aguardando') continue;
-    aplicarResposta(processo, { status: classificarResposta(resposta.texto), texto: resposta.texto, por: resposta.por, em: resposta.em, origem: 'sgp' }, cronograma, hoje);
+    if (!processo || processo.status !== 'ativo') continue;
+    const primeiraVez = !processo.supervisor;
+    const sup = processo.supervisor || {};
+    let autorizacaoMudou = false;
+
+    const a = processo.autorizacao;
+    if (bloqueada(processo)) {
+      // Esperando: vale a resposta depois do pedido. Já negado/sem entender: só um comentário NOVO dele muda.
+      const ignorar = new Set([...(a.ignorar || []), ...(a.status === 'aguardando' ? [] : (primeiraVez ? doSupervisor.map(chaveComentario) : [...jaLidos]))]);
+      if (a.respostaChave) ignorar.add(a.respostaChave);
+      const resposta = acharResposta(comentarios, { supervisor, usuarioSistema, pedidoEm: a.pedidoEm, ignorar });
+      if (resposta) {
+        aplicarResposta(processo, { status: classificarResposta(resposta.texto), texto: resposta.texto, por: resposta.por, em: resposta.em, chave: resposta.chave, origem: 'sgp' }, cronograma, hoje);
+        autorizacaoMudou = true;
+      }
+    }
+    if (!autorizacaoMudou) {
+      const avisar = novos.filter((c) => !primeiraVez || String(c.data_cadastro || '').slice(0, 10) >= recente);
+      const ultimo = avisar[avisar.length - 1];
+      if (ultimo) {
+        Object.assign(sup, {
+          ultimo: { texto: textoPuro(ultimo.comentario).slice(0, 2000), por: ultimo.usuario, em: String(ultimo.data_cadastro || '').slice(0, 16) || hoje, novos: avisar.length },
+          avisadoEm: hoje, vistoPor: [],
+        });
+        mudaram.comentarios.push(processo);
+      }
+    }
+    sup.lidos = [...jaLidos, ...novos.map(chaveComentario)].slice(-60);
+    processo.supervisor = sup;
     await repositorio.salvarProcesso(processo);
-    mudaram.push(processo);
+    if (autorizacaoMudou) mudaram.push(processo);
   }
   return mudaram;
 }

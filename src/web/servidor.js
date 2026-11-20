@@ -127,22 +127,43 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
 
   // Autorização do supervisor: só faz sentido com comentários ligados (é por eles que o Lucas é perguntado).
   const exigirAutorizacao = Boolean(comentarOcorrenciaSgp && config.sgp.supervisor && config.sgp.exigirAutorizacao);
+  // Leitura dos comentários do Lucas nas ocorrências: com o SGP real, sempre (sem SGP_SUPERVISOR, usa "admin").
+  const supervisorLeitura = config.sgp.supervisor || 'admin';
+  const lerLucas = !modoDemo && config.sgp.modo === 'api';
   let aoAutorizar = null; // definido pela tela (comenta o início da etapa liberada)
-  async function lerAutorizacoes() {
-    try {
-      const mudaram = await servico.lerAutorizacoes({
-        sgp: criarSgp(hojeISO()), repositorio: armazenamento.repositorio, cronograma, hoje: hojeISO(),
-        supervisor: config.sgp.supervisor, usuarioSistema: config.sgp.usuarioIntegracao,
-      });
-      if (mudaram.length) console.log(`Respostas de autorização lidas no SGP: ${mudaram.length}`);
-      if (aoAutorizar) for (const p of mudaram) aoAutorizar(p);
-    } catch (erro) {
-      console.error(`Leitura das autorizações falhou: ${erro.message}`);
-    }
+  let leituraLucas = { ultima: null, emAndamento: false, ultimaCompleta: 0 };
+  let leituraAtual = null;
+  async function lerAutorizacoes({ todos = true } = {}) {
+    if (leituraAtual) return leituraAtual;
+    leituraLucas.emAndamento = true;
+    leituraAtual = (async () => {
+      try {
+        const mudaram = await servico.lerAutorizacoes({
+          sgp: criarSgp(hojeISO()), repositorio: armazenamento.repositorio, cronograma, hoje: hojeISO(),
+          supervisor: supervisorLeitura, usuarioSistema: config.sgp.usuarioIntegracao, todos,
+        });
+        if (mudaram.length) console.log(`Respostas de autorização do Lucas lidas no SGP: ${mudaram.length}`);
+        if (mudaram.comentarios.length) console.log(`Comentários novos do Lucas: ${mudaram.comentarios.length}`);
+        if (mudaram.erros.length) console.error(`Leitura do Lucas: ${mudaram.erros.length} ocorrência(s) com erro. ${mudaram.erros[0]}`);
+        if (aoAutorizar) for (const p of mudaram) aoAutorizar(p);
+        if (todos) leituraLucas.ultimaCompleta = Date.now();
+        leituraLucas.ultima = { em: new Date().toISOString(), ok: true, todos, lidas: mudaram.lidos, respostas: mudaram.length, comentarios: mudaram.comentarios.length, erros: mudaram.erros.length };
+      } catch (erro) {
+        console.error(`Leitura das autorizações falhou: ${erro.message}`);
+        leituraLucas.ultima = { em: new Date().toISOString(), ok: false, todos, erro: erro.message };
+      } finally {
+        leituraLucas.emAndamento = false;
+        leituraAtual = null;
+      }
+      return leituraLucas.ultima;
+    })();
+    return leituraAtual;
   }
-  if (exigirAutorizacao) {
-    setInterval(lerAutorizacoes, 10 * 60 * 1000).unref();
-    console.log('Autorização do supervisor entre etapas: LIGADA (lê a resposta na ocorrência a cada 10 minutos).');
+  if (lerLucas) {
+    // A cada 5 minutos lê quem está parado esperando o Lucas; a cada 15, todos os clientes ativos.
+    setInterval(() => lerAutorizacoes({ todos: Date.now() - leituraLucas.ultimaCompleta >= 15 * 60 * 1000 }), 5 * 60 * 1000).unref();
+    setTimeout(() => lerAutorizacoes({ todos: true }), 60 * 1000).unref();
+    console.log(`Comentários do Lucas (${supervisorLeitura}) nas ocorrências: lidos a cada 5 minutos (parados) e 15 minutos (todos).${exigirAutorizacao ? ' Autorização entre etapas: LIGADA.' : ''}`);
   }
 
   // Regra do Pendente: só com o SGP real (é lá que a Jéssica muda o status da ocorrência).
@@ -156,7 +177,8 @@ async function iniciarServidor({ arquivoDados, modoDemo = false } = {}) {
     statusOcorrenciaSgp,
     anexarOcorrenciaSgp,
     printObrigatorio: config.printObrigatorio,
-    lerAutorizacoes: exigirAutorizacao ? lerAutorizacoes : null,
+    lerAutorizacoes: lerLucas ? lerAutorizacoes : null,
+    statusLeituraLucas: lerLucas ? () => ({ ...leituraLucas }) : null,
     registrarAoAutorizar: (fn) => { aoAutorizar = fn; },
     aposAcao: () => avisosPendentes(hojeISO()),
     criarOcorrenciaSgp,

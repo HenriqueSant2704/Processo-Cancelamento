@@ -8,7 +8,7 @@ const { hojeISO } = require('../utils/datas');
 const visao = require('./visao');
 const { posicionar, registrarPromessa, obterEtapa } = require('../cronograma/motor');
 const { registrar } = require('../auditoria/historico');
-const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo } = require('../processos/autorizacao');
+const { bloqueada, pedirAutorizacao, aplicarResposta, pedirDeNovo, marcarVisto } = require('../processos/autorizacao');
 const { htmlComentario, textoComentario } = require('../processos/comentarios');
 const { criarSincronizador } = require('../processos/sincronizador');
 const { lerPrint } = require('../processos/prints');
@@ -321,7 +321,15 @@ function criarApp(opcoes) {
       const hoje = modoDemo && dataParam ? dataParam : hojeISO();
 
       if (req.method === 'GET' && url.pathname === '/api/painel') {
-        return responderJson(res, 200, { ...visao.painel(await repositorio.listar(), hoje, cronograma), modoDemo, hojeReal: hojeISO() });
+        const quem = usuario ? usuario.nome : (url.searchParams.get('para') || '').trim().slice(0, 80);
+        const leitura = typeof opcoes.statusLeituraLucas === 'function' ? opcoes.statusLeituraLucas() : null;
+        return responderJson(res, 200, { ...visao.painel(await repositorio.listar(), hoje, cronograma, quem), leituraLucas: leitura, modoDemo, hojeReal: hojeISO() });
+      }
+      // "Verificar agora": lê já as respostas do Lucas nas ocorrências (sem esperar a próxima leitura automática).
+      if (req.method === 'POST' && url.pathname === '/api/lucas/ler') {
+        if (typeof opcoes.lerAutorizacoes !== 'function') throw new ErroHttp(400, 'A leitura dos comentários do Lucas no SGP não está ligada.');
+        const r = await opcoes.lerAutorizacoes({ todos: true });
+        return responderJson(res, 200, r || {});
       }
       if (req.method === 'GET' && url.pathname === '/api/agenda') {
         const dia = url.searchParams.get('dia');
@@ -355,17 +363,19 @@ function criarApp(opcoes) {
         const corpo = await lerCorpo(req);
         const processo = await repositorio.obter(m[1]);
         if (!processo) throw new ErroHttp(404, 'Processo não encontrado.');
-        if (!processo.autorizacao) throw new ErroHttp(400, 'Este cliente não está aguardando autorização.');
+        if (!processo.autorizacao && !(corpo.acao === 'visto' && processo.supervisor)) throw new ErroHttp(400, 'Este cliente não está aguardando autorização.');
         const por = usuario ? usuario.nome : (typeof corpo.por === 'string' ? corpo.por.trim().slice(0, 80) : '');
         if (!por) throw new ErroHttp(400, 'Informe quem está registrando.');
         const observacao = typeof corpo.observacao === 'string' ? corpo.observacao.trim().slice(0, 1000) : '';
-        const antes = processo.autorizacao.status;
+        const antes = processo.autorizacao ? processo.autorizacao.status : null;
         if (corpo.acao === 'autorizar' || corpo.acao === 'negar') {
           aplicarResposta(processo, { status: corpo.acao === 'autorizar' ? 'autorizado' : 'negado', texto: observacao || undefined, por, origem: por }, cronograma, hoje);
         } else if (corpo.acao === 'pedir') {
           pedirDeNovo(processo, { por, data: hoje });
         } else if (corpo.acao === 'visto') {
-          processo.autorizacao.visto = true;
+          // Visto só para quem abriu: o aviso continua no sino das outras pessoas.
+          marcarVisto(processo.autorizacao, por);
+          marcarVisto(processo.supervisor, por);
         } else {
           throw new ErroHttp(400, 'Ação de autorização inválida.');
         }

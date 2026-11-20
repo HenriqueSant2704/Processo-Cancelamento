@@ -534,6 +534,9 @@ details.historico[open] summary .secao-titulo::after { content: "–"; }
 .selo-mini.aut-aguardando { background: var(--alerta-suave); color: var(--alerta); }
 .selo-mini.aut-negado { background: var(--perigo-suave); color: var(--perigo); }
 .selo-mini.aut-respondido { background: var(--marca-suave); color: var(--marca-texto); }
+.selo-mini.aut-comentou { background: var(--marca-suave); color: var(--marca-texto); }
+.cartao-aut.aut-comentou { border-color: var(--marca); background: var(--marca-suave); }
+.sino-titulo-acao { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .selo-mini.aut-autorizado { background: var(--sucesso-suave); color: var(--sucesso); }
 .cartao-aut { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--linha); background: var(--superficie-2); }
 .cartao-aut.aut-aguardando { border-color: var(--alerta); background: var(--alerta-suave); }

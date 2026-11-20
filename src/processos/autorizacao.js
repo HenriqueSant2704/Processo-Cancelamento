@@ -56,13 +56,14 @@ function pedirAutorizacao(processo, { etapaAnterior, etapa, data, por }) {
 }
 
 // status: autorizado | negado | respondido. origem: 'sgp' (leitura da ocorrência) ou o nome de quem confirmou na tela.
-function aplicarResposta(processo, { status, texto, por, em, origem }, cronograma, hoje) {
+function aplicarResposta(processo, { status, texto, por, em, origem, chave }, cronograma, hoje) {
   const a = processo.autorizacao;
   if (!a) throw new Error('Este cliente não está aguardando autorização.');
   if (!['autorizado', 'negado', 'respondido'].includes(status)) throw new Error('Resposta de autorização inválida.');
   const anterior = a.status;
-  Object.assign(a, { status, decididoEm: hoje, visto: origem !== 'sgp' });
+  Object.assign(a, { status, decididoEm: hoje, visto: origem !== 'sgp', vistoPor: origem !== 'sgp' ? [origem] : [] });
   if (texto) a.resposta = { texto: textoPuro(texto).slice(0, 2000), por: por || null, em: em || hoje };
+  if (chave) a.respostaChave = chave;
   if (origem !== 'sgp') a.confirmadoPor = origem;
   if (status === 'autorizado' && anterior !== 'autorizado') remarcarEtapa(processo, a.etapa, hoje, cronograma.feriados || []);
   const quem = origem === 'sgp' ? `${por || 'supervisor'} (comentário no SGP)` : origem;
@@ -73,25 +74,48 @@ function pedirDeNovo(processo, { por, data }) {
   const a = processo.autorizacao;
   if (!a) throw new Error('Este cliente não está aguardando autorização.');
   Object.assign(a, { status: 'aguardando', pedidoEm: data, visto: true, resposta: null, decididoEm: null });
+  // A resposta antiga não vale para o novo pedido.
+  if (a.respostaChave) a.ignorar = [...(a.ignorar || []), a.respostaChave].slice(-20);
   registrar(processo, { data, por, evento: 'autorizacao-pedida', detalhes: 'Autorização pedida de novo ao supervisor' });
 }
 
-// Procura a resposta do supervisor nos comentários da ocorrência: o primeiro comentário dele
-// DEPOIS do último pedido "Posso dar continuidade?" do sistema (ou, sem achar o pedido, a partir do dia do pedido).
-function acharResposta(comentarios, { supervisor, usuarioSistema, pedidoEm }) {
+// Usernames do supervisor no SGP. SGP_SUPERVISOR aceita mais de um, separados por vírgula.
+const listaSupervisores = (s) => String(s || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+const ehDoSupervisor = (c, supervisor) => listaSupervisores(supervisor).includes(String(c.usuario ?? '').trim().toLowerCase());
+const diaDe = (c) => String(c.data_cadastro || '').slice(0, 10);
+// Identifica um comentário entre uma leitura e outra (para não avisar duas vezes do mesmo).
+const chaveComentario = (c) => (c.id != null && c.id !== '' ? `id:${c.id}` : `${c.data_cadastro || ''}|${String(c.usuario || '').toLowerCase()}|${textoPuro(c.comentario).slice(0, 80)}`);
+
+// Procura a resposta do supervisor nos comentários da ocorrência: o comentário MAIS RECENTE dele
+// depois do pedido do sistema. O pedido é o primeiro comentário do sistema a partir do dia do pedido
+// (comentários do sistema depois dele, como um registro da Jéssica, não escondem a resposta).
+// ignorar: chaves de comentários já lidos (ex.: a resposta antiga quando a Jéssica pede de novo).
+function acharResposta(comentarios, { supervisor, usuarioSistema, pedidoEm, ignorar }) {
   const lista = Array.isArray(comentarios) ? comentarios : [];
-  const sup = String(supervisor || '').toLowerCase();
+  const sistema = String(usuarioSistema || '').trim().toLowerCase();
+  const doSistema = (c) => Boolean(sistema) && String(c.usuario || '').trim().toLowerCase() === sistema;
+  // Pedido = o último comentário do sistema (a partir do dia do pedido) que pergunta se pode continuar;
+  // sem achar a pergunta (o texto é editável), o primeiro comentário do sistema a partir desse dia.
   let inicio = -1;
-  // Último comentário do sistema a partir do dia do pedido (é o pedido; o texto é livre).
-  lista.forEach((c, i) => {
-    const doSistema = String(c.usuario || '').toLowerCase() === String(usuarioSistema || '').toLowerCase();
-    if (doSistema && (String(c.data_cadastro || '').slice(0, 10) >= pedidoEm || /posso dar continuidade/i.test(c.comentario || ''))) inicio = i;
-  });
+  lista.forEach((c, i) => { if (doSistema(c) && diaDe(c) >= pedidoEm && /continuidade|posso (seguir|continuar|prosseguir)|autoriza/i.test(textoPuro(c.comentario))) inicio = i; });
+  if (inicio < 0) inicio = lista.findIndex((c) => doSistema(c) && diaDe(c) >= pedidoEm);
+  if (inicio < 0) lista.forEach((c, i) => { if (doSistema(c) && /posso dar continuidade/i.test(c.comentario || '')) inicio = i; });
+  const vistos = ignorar instanceof Set ? ignorar : new Set(ignorar || []);
   const candidatos = lista
     .map((c, i) => ({ ...c, i }))
-    .filter((c) => String(c.usuario || '').toLowerCase() === sup && (inicio >= 0 ? c.i > inicio : String(c.data_cadastro || '').slice(0, 10) >= pedidoEm));
-  const resposta = candidatos.find((c) => textoPuro(c.comentario).length > 0);
-  return resposta ? { texto: resposta.comentario, por: resposta.usuario, em: String(resposta.data_cadastro || '').slice(0, 10) || null } : null;
+    .filter((c) => ehDoSupervisor(c, supervisor) && (inicio >= 0 ? c.i > inicio : diaDe(c) >= pedidoEm))
+    .filter((c) => textoPuro(c.comentario).length > 0 && !vistos.has(chaveComentario(c)));
+  const resposta = candidatos[candidatos.length - 1];
+  return resposta ? { texto: resposta.comentario, por: resposta.usuario, em: diaDe(resposta) || null, chave: chaveComentario(resposta) } : null;
 }
 
-module.exports = { bloqueada, classificarResposta, remarcarEtapa, pedirAutorizacao, aplicarResposta, pedirDeNovo, acharResposta, textoPuro, NOMES };
+// Marca como visto por uma pessoa (cada um tem o seu sino: abrir no usuário do Miguel não apaga o da Jéssica).
+function marcarVisto(aviso, quem) {
+  if (!aviso || !quem) return;
+  const lista = Array.isArray(aviso.vistoPor) ? aviso.vistoPor : [];
+  if (!lista.includes(quem)) lista.push(quem);
+  aviso.vistoPor = lista;
+}
+const vistoPor = (aviso, quem) => Boolean(aviso && quem && Array.isArray(aviso.vistoPor) && aviso.vistoPor.includes(quem));
+
+module.exports = { listaSupervisores, ehDoSupervisor, chaveComentario, marcarVisto, vistoPor, bloqueada, classificarResposta, remarcarEtapa, pedirAutorizacao, aplicarResposta, pedirDeNovo, acharResposta, textoPuro, NOMES };

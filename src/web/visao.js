@@ -2,7 +2,8 @@
 // decisões pendentes, próximos dias e o resumo de cada cliente.
 const { diasEntre, adicionarDiasUteis, proximoDiaUtil, ehDiaUtil } = require('../utils/datas');
 const { obterEtapa, obterFluxo } = require('../cronograma/motor');
-const { bloqueada, NOMES: NOMES_AUTORIZACAO } = require('../processos/autorizacao');
+const { bloqueada, vistoPor, NOMES: NOMES_AUTORIZACAO } = require('../processos/autorizacao');
+const { adicionarDias } = require('../utils/datas');
 
 const porData = (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id, undefined, { numeric: true });
 
@@ -66,6 +67,8 @@ function visaoProcesso(processo, hoje, cronograma) {
     etapa: etapa ? { id: etapa.id, nome: etapa.nome, fase: etapa.fase, tipo: etapa.tipo } : null,
     faseIndice: etapa ? cronograma.fases.indexOf(etapa.fase) : -1,
     passo: parado ? { id: `aut-${aut.status}`, nome: NOMES_AUTORIZACAO[aut.status] } : passoAtual(processo, etapa, hoje),
+    // Último comentário do supervisor lido na ocorrência (sem a lista interna de lidos).
+    supervisor: processo.supervisor && processo.supervisor.ultimo ? { ultimo: processo.supervisor.ultimo, avisadoEm: processo.supervisor.avisadoEm || null, vistoPor: processo.supervisor.vistoPor || [] } : null,
     autorizacao: aut ? { ...aut, etapaNome: aut.etapa ? (cronograma.etapas.find((e) => e.id === aut.etapa) || {}).nome || aut.etapa : null, etapaAnteriorNome: aut.etapaAnterior ? (cronograma.etapas.find((e) => e.id === aut.etapaAnterior) || {}).nome || aut.etapaAnterior : null } : null,
     parado,
     contatos: {
@@ -84,7 +87,8 @@ function prioridade(v) {
   return 2;
 }
 
-function painel(processos, hoje, cronograma) {
+// quem: nome de quem está vendo (cada pessoa tem o seu sino).
+function painel(processos, hoje, cronograma, quem = '') {
   const feriados = cronograma.feriados || [];
   const ativos = processos.filter((p) => p.status === 'ativo');
   const visoes = ativos.map((p) => visaoProcesso(p, hoje, cronograma));
@@ -126,10 +130,16 @@ function painel(processos, hoje, cronograma) {
       .filter((v) => v.paraHoje.length || v.parado)
       .sort((a, b) => prioridade(a) - prioridade(b) || a.cliente.nome.localeCompare(b.cliente.nome)),
     proximosDias,
-    // Sino da Jéssica: respostas do supervisor que ela ainda não viu.
-    notificacoes: ativos
-      .filter((p) => p.autorizacao && p.autorizacao.visto === false)
-      .map((p) => ({ id: p.id, cliente: p.cliente.nome, contrato: p.cliente.contrato, status: p.autorizacao.status, nome: NOMES_AUTORIZACAO[p.autorizacao.status], resposta: p.autorizacao.resposta || null, em: p.autorizacao.decididoEm || null }))
+    // Sino: respostas e comentários do supervisor que esta pessoa ainda não viu (últimos 7 dias).
+    // Abrir no usuário do Miguel não apaga o aviso da Jéssica: cada um marca o seu.
+    notificacoes: [
+      ...ativos
+        .filter((p) => p.autorizacao && p.autorizacao.visto === false && !vistoPor(p.autorizacao, quem) && String(p.autorizacao.decididoEm || hoje) >= adicionarDias(hoje, -7))
+        .map((p) => ({ id: p.id, tipo: 'autorizacao', cliente: p.cliente.nome, contrato: p.cliente.contrato, status: p.autorizacao.status, nome: NOMES_AUTORIZACAO[p.autorizacao.status], resposta: p.autorizacao.resposta || null, em: p.autorizacao.decididoEm || null })),
+      ...ativos
+        .filter((p) => p.supervisor && p.supervisor.ultimo && !vistoPor(p.supervisor, quem) && String(p.supervisor.avisadoEm || '') >= adicionarDias(hoje, -7))
+        .map((p) => ({ id: p.id, tipo: 'comentario', cliente: p.cliente.nome, contrato: p.cliente.contrato, status: 'comentou', nome: 'Lucas comentou', resposta: p.supervisor.ultimo, em: p.supervisor.avisadoEm })),
+    ]
       .sort((a, b) => String(b.em).localeCompare(String(a.em))),
   };
 }

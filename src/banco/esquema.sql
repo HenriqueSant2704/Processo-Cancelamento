@@ -101,6 +101,9 @@ create table if not exists fichas_clientes (
 -- Autorização do supervisor entre etapas (aguardando / autorizado / negado / respondido, texto da resposta, visto).
 alter table processos add column if not exists autorizacao jsonb;
 
+-- Comentários do supervisor (Lucas) lidos na ocorrência: { lidos: [chaves], ultimo: { texto, por, em }, vistoPor: [nomes] }.
+alter table processos add column if not exists supervisor jsonb;
+
 -- Prints que comprovam cada aviso (imagem guardada aqui; enviado_sgp_em = quando foi anexado na ocorrência).
 create table if not exists anexos (
   id             serial primary key,

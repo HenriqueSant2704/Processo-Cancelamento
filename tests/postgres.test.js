@@ -197,3 +197,18 @@ test('repositório Postgres: número da ocorrência criada pelo sistema fica gra
   await repo.salvarProcesso(lido);
   assert.strictEqual((await repo.obter('1')).ocorrencia.numero, '261119134800');
 });
+
+test('repositório Postgres: guarda os comentários lidos do Lucas (supervisor)', async (t) => {
+  const repo = new RepositorioPostgres(await novoBanco(t));
+  const p = criarProcesso({ id: '1', cliente: { id: '9', nome: 'Gleice', contrato: '9' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-16', cronograma });
+  p.ocorrencia = { numero: '777' };
+  await repo.salvarProcesso(p);
+  const { lerAutorizacoes } = require('../src/processos/servico');
+  const sgp = { comentariosDaOcorrencia: async () => [{ usuario: 'admin', comentario: 'Autorizado', data_cadastro: '2026-11-20 19:00' }] };
+  const r = await lerAutorizacoes({ sgp, repositorio: repo, cronograma, hoje: '2026-11-20', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.comentarios.length, 1);
+  const lido = await repo.obter('1');
+  assert.strictEqual(lido.supervisor.ultimo.texto, 'Autorizado');
+  assert.strictEqual((await repo.listar())[0].supervisor.lidos.length, 1);
+  assert.strictEqual((await lerAutorizacoes({ sgp, repositorio: repo, cronograma, hoje: '2026-11-20', supervisor: 'admin', usuarioSistema: 'temis_integracao' })).comentarios.length, 0);
+});

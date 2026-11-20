@@ -25,7 +25,7 @@ test('acha a resposta do supervisor depois do pedido do sistema', () => {
     { usuario: 'admin', comentario: '<p>Pode seguir</p>', data_cadastro: '2026-11-19' },
   ];
   const r = acharResposta(comentarios, { supervisor: 'admin', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-18' });
-  assert.deepStrictEqual(r, { texto: '<p>Pode seguir</p>', por: 'admin', em: '2026-11-19' });
+  assert.deepStrictEqual(r, { texto: '<p>Pode seguir</p>', por: 'admin', em: '2026-11-19', chave: '2026-11-19|admin|Pode seguir' });
   assert.strictEqual(acharResposta(comentarios.slice(0, 3), { supervisor: 'admin', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-18' }), null);
 });
 
@@ -90,8 +90,12 @@ test('"não regularizou": cliente para em Aguardando autorização até o Lucas 
   assert.match(comentarios[1].texto, /Nova etapa/);
   assert.deepStrictEqual(comentarios[1].marcar, []);
 
+  // Visto é de cada pessoa: o Miguel abrir no usuário dele não apaga o aviso da Jéssica.
+  await chamar('/api/processos/1/autorizacao?data=2026-11-24', { por: 'Miguel', acao: 'visto' });
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-24&para=Miguel')).json.notificacoes.length, 0);
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-24&para=Jessica')).json.notificacoes.length, 1);
   await chamar('/api/processos/1/autorizacao?data=2026-11-24', { por: 'Jessica', acao: 'visto' });
-  assert.strictEqual((await chamar('/api/painel?data=2026-11-24')).json.notificacoes.length, 0);
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-24&para=Jessica')).json.notificacoes.length, 0);
 });
 
 test('negado: continua parado; a Jéssica pode pedir de novo ou confirmar pela tela', async (t) => {
@@ -186,4 +190,82 @@ test('resposta do Lucas é achada depois do pedido escrito pela Jéssica (texto 
   ];
   const r = acharResposta(comentarios, { supervisor: 'admin', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-23' });
   assert.strictEqual(r.texto, 'Pode sim');
+});
+
+test('resposta do Lucas não some quando o sistema comenta de novo depois dela', () => {
+  const comentarios = [
+    { usuario: 'temis_integracao', comentario: 'Etapa encerrada. Posso dar continuidade?', data_cadastro: '2026-11-20 09:00' },
+    { usuario: 'admin', comentario: 'Pode seguir', data_cadastro: '2026-11-20 10:00' },
+    { usuario: 'temis_integracao', comentario: 'Registro do financeiro: liguei para a cliente', data_cadastro: '2026-11-20 11:00' },
+  ];
+  const r = acharResposta(comentarios, { supervisor: 'admin', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-20' });
+  assert.ok(r);
+  assert.strictEqual(r.texto, 'Pode seguir');
+  // Vários usernames aceitos (SGP_SUPERVISOR=admin,lucas)
+  assert.ok(acharResposta(comentarios, { supervisor: 'lucas, ADMIN', usuarioSistema: 'temis_integracao', pedidoEm: '2026-11-20' }));
+});
+
+test('Lucas comenta numa ocorrência sem pedido do sistema: vira aviso no sino de cada pessoa', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  await prepararNaoRegularizou(repositorio);
+  const chamar = subir(t, { repositorio });
+  let lista = [
+    { usuario: 'admin', comentario: 'comentário de mês passado', data_cadastro: '2026-10-01 10:00' },
+    { usuario: 'admin', comentario: 'Autorizado, pode negativar a Gleice', data_cadastro: '2026-11-20 19:30' },
+  ];
+  const sgp = { comentariosDaOcorrencia: async () => lista };
+  let r = await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-20', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.length, 0);
+  assert.strictEqual(r.comentarios.length, 1);
+  let painel = (await chamar('/api/painel?data=2026-11-20&para=Jessica')).json;
+  assert.strictEqual(painel.notificacoes.length, 1);
+  assert.strictEqual(painel.notificacoes[0].tipo, 'comentario');
+  assert.match(painel.notificacoes[0].resposta.texto, /pode negativar/);
+  // O mesmo comentário não avisa duas vezes.
+  r = await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-20', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.comentarios.length, 0);
+  // Miguel vê; a Jéssica continua com o aviso.
+  await chamar('/api/processos/1/autorizacao?data=2026-11-20', { por: 'Miguel', acao: 'visto' });
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-20&para=Miguel')).json.notificacoes.length, 0);
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-20&para=Jessica')).json.notificacoes.length, 1);
+  // Comentário novo volta a avisar.
+  lista = [...lista, { usuario: 'admin', comentario: 'Jéssica, me avisa quando terminar', data_cadastro: '2026-11-21 08:00' }];
+  r = await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-21', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.comentarios.length, 1);
+  assert.strictEqual((await chamar('/api/painel?data=2026-11-21&para=Miguel')).json.notificacoes.length, 1);
+});
+
+test('negado e depois "pode seguir": o comentário novo do Lucas libera o cliente', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  const p = await prepararNaoRegularizou(repositorio);
+  const comentarios = [];
+  const chamar = subir(t, { repositorio, exigirAutorizacao: true, supervisorSgp: 'admin', comentarOcorrenciaSgp: async (c) => { comentarios.push(c); } });
+  const decisao = p.tarefas.find((x) => x.tipo === 'decisao' && x.status === 'pendente');
+  await chamar(`/api/tarefas/${decisao.id}/concluir?data=2026-11-23`, { por: 'Jessica', resposta: 'nao', observacao: 'Sem retorno' });
+  let lista = [{ usuario: 'admin', comentario: 'Não, aguarda até amanhã', data_cadastro: '2026-11-23 10:00' }];
+  const sgp = { comentariosDaOcorrencia: async () => lista };
+  await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-23', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual((await repositorio.obter('1')).autorizacao.status, 'negado');
+  // Ler de novo não muda nada.
+  let r = await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-23', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.length, 0);
+  lista = [...lista, { usuario: 'admin', comentario: 'Pode seguir com a negativação', data_cadastro: '2026-11-24 09:00' }];
+  r = await lerAutorizacoes({ sgp, repositorio, cronograma, hoje: '2026-11-24', supervisor: 'admin', usuarioSistema: 'temis_integracao' });
+  assert.strictEqual(r.length, 1);
+  const d = (await chamar('/api/processos/1?data=2026-11-24')).json;
+  assert.strictEqual(d.autorizacao.status, 'autorizado');
+  assert.ok(d.paraHoje.length > 0);
+});
+
+test('"Verificar agora" chama a leitura e, sem ela ligada, explica', async (t) => {
+  const repositorio = new RepositorioJson(null);
+  let chamadas = 0;
+  const chamar = subir(t, { repositorio, lerAutorizacoes: async () => { chamadas++; return { ok: true, respostas: 0, comentarios: 1 }; }, statusLeituraLucas: () => ({ ultima: null }) });
+  const r = await chamar('/api/lucas/ler', {});
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.comentarios, 1);
+  assert.strictEqual(chamadas, 1);
+  assert.deepStrictEqual((await chamar('/api/painel')).json.leituraLucas, { ultima: null });
+  const sem = subir(t, { repositorio: new RepositorioJson(null) });
+  assert.strictEqual((await sem('/api/lucas/ler', {})).status, 400);
 });

@@ -168,7 +168,7 @@ test('depois da retirada de equipamentos o processo segue para a negativação p
     assert.ok(pendentes(p, 'acao').some((t) => t.descricao === 'Abrir ocorrência de negativação pós-cancelamento no SGP'));
     concluirTodas(p, 'acao', '2026-11-18');
     assert.strictEqual(p.etapaAtual, 'notificacao-pos-cancelamento');
-    assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-18', '2026-11-20', '2026-11-24']);
+    assert.deepStrictEqual(datas(p, 'contato'), ['2026-11-18', '2026-11-20', '2026-11-23']); // sexta -> segunda
   }
 });
 
@@ -194,4 +194,39 @@ test('ajustar etapa de novo não conta avisos em dobro (o que estava feito na et
   assert.deepStrictEqual(v.contatos, { feitos: 1, total: 3 });
   assert.strictEqual(v.passo.id, 'msg-2');
   assert.strictEqual(p.tarefas.filter((t) => t.status === 'concluida' && t.tipo === 'contato').length, 1);
+});
+
+test('processos em andamento são refeitos pela regra nova da folga (ex.: enviou quinta 19, sexta feriado -> segunda 23)', () => {
+  const { realinharAvisos } = require('../src/cronograma/motor');
+  const cron = JSON.parse(JSON.stringify(cronograma));
+  cron.feriados = ['2026-11-20'];
+  const p = novo('2026-11-17'); // avisos 17 (ter), 19 (qui), 23 (seg)
+  const contatos = () => p.tarefas.filter((t) => t.tipo === 'contato');
+  for (const t of p.tarefas.filter((t) => t.tipo === 'acao' || t.data <= '2026-11-19')) {
+    if (t.tipo !== 'decisao') Object.assign(t, { status: 'concluida', concluidaEm: t.data });
+  }
+  // como a regra antiga tinha deixado: 3º aviso na terça 24 e a pergunta na quarta 25
+  contatos()[2].data = '2026-11-24';
+  p.tarefas.find((t) => t.tipo === 'decisao').data = '2026-11-25';
+  assert.strictEqual(realinharAvisos(p, cron, '2026-11-23'), true);
+  assert.strictEqual(contatos()[2].data, '2026-11-23');
+  assert.strictEqual(p.tarefas.find((t) => t.tipo === 'decisao').data, '2026-11-24');
+  assert.strictEqual(realinharAvisos(p, cron, '2026-11-23'), false); // rodar de novo não muda nada
+
+  // data ajustada à mão (não bate com a regra antiga) fica como está
+  contatos()[2].data = '2026-11-26';
+  assert.strictEqual(realinharAvisos(p, cron, '2026-11-23'), false);
+  assert.strictEqual(contatos()[2].data, '2026-11-26');
+});
+
+test('regra nova não joga aviso para antes de hoje', () => {
+  const { realinharAvisos } = require('../src/cronograma/motor');
+  const cron = JSON.parse(JSON.stringify(cronograma));
+  cron.feriados = ['2026-11-20'];
+  const p = novo('2026-11-17');
+  for (const t of p.tarefas.filter((t) => t.tipo === 'acao' || t.data <= '2026-11-19')) {
+    if (t.tipo !== 'decisao') Object.assign(t, { status: 'concluida', concluidaEm: t.data });
+  }
+  p.tarefas.filter((t) => t.tipo === 'contato')[2].data = '2026-11-24';
+  assert.strictEqual(realinharAvisos(p, cron, '2026-11-24'), false); // hoje já é 24: fica 24
 });

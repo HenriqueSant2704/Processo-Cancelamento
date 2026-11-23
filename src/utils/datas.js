@@ -53,6 +53,22 @@ function subtrairDiasUteis(iso, quantidade, feriados = []) {
   return dia;
 }
 
+// Próximo aviso de uma etapa "dia sim, dia não" (regra do Miguel, 23/11): entre um aviso e o outro o cliente
+// precisa ter pelo menos um dia de folga para regularizar, e esse dia pode ser QUALQUER dia (útil, sábado,
+// domingo ou feriado). Então conta dias corridos e cai no próximo dia útil:
+//   segunda -> quarta; quinta (sexta normal) -> segunda; sexta -> segunda;
+//   quinta com sexta feriado -> segunda; terça com quarta feriado -> quinta.
+function proximoAviso(iso, intervalo = 2, feriados = []) {
+  return proximoDiaUtil(adicionarDias(iso, intervalo), feriados);
+}
+
+// O contrário: o dia útil mais recente cujo próximo aviso cai até a data informada.
+function avisoAnterior(iso, intervalo = 2, feriados = []) {
+  let dia = adicionarDias(iso, -1);
+  while (!(ehDiaUtil(dia, feriados) && proximoAviso(dia, intervalo, feriados) <= iso)) dia = adicionarDias(dia, -1);
+  return dia;
+}
+
 function hojeISO(timeZone = process.env.TZ || 'America/Sao_Paulo', agora = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
 }
@@ -63,4 +79,4 @@ function formatarData(iso) {
   return `${dia}/${mes}/${ano} (${DIAS_SEMANA[paraData(iso).getUTCDay()]})`;
 }
 
-module.exports = { adicionarDias, diasEntre, ehDiaUtil, proximoDiaUtil, adicionarDiasUteis, subtrairDiasUteis, hojeISO, formatarData };
+module.exports = { adicionarDias, diasEntre, ehDiaUtil, proximoDiaUtil, adicionarDiasUteis, subtrairDiasUteis, proximoAviso, avisoAnterior, hojeISO, formatarData };

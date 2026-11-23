@@ -1,7 +1,7 @@
 // Motor do cronograma: cria o processo de um cliente, gera as tarefas de cada
 // etapa com as datas certas e avança conforme o funcionário conclui as tarefas.
 // Todas as regras (prazos, tentativas, intervalos) vêm do cronograma.json.
-const { proximoDiaUtil, adicionarDias, adicionarDiasUteis, subtrairDiasUteis } = require('../utils/datas');
+const { proximoDiaUtil, adicionarDias, adicionarDiasUteis, proximoAviso, avisoAnterior } = require('../utils/datas');
 const { registrar } = require('../auditoria/historico');
 
 function obterEtapa(cronograma, id) {
@@ -57,14 +57,14 @@ function criarProcesso({ id, cliente, bloqueadoEm, inicio, cronograma, fluxo = '
 }
 
 // Gera os avisos de uma etapa de contatos a partir do aviso nº "deIndice" (1 = todos),
-// em dias úteis alternados, e a pergunta "regularizou?" depois do último.
+// dia sim, dia não (o dia de folga pode ser fim de semana ou feriado), e a pergunta "regularizou?" depois do último.
 function gerarContatos(processo, etapa, primeiroDia, deIndice, feriados) {
   let dia = primeiroDia;
   let ultimoContato = dia;
   for (let i = deIndice; i <= etapa.tentativas; i++) {
     novaTarefa(processo, { etapa: etapa.id, tipo: 'contato', descricao: `${etapa.mensagem} (${i}ª de ${etapa.tentativas})`, data: dia });
     ultimoContato = dia;
-    dia = adicionarDiasUteis(dia, etapa.intervaloDiasUteis, feriados);
+    dia = proximoAviso(dia, etapa.intervaloDiasUteis, feriados);
   }
   novaTarefa(processo, {
     etapa: etapa.id,
@@ -180,12 +180,12 @@ function concluirTarefa(processo, tarefaId, { por, data, observacao, resposta },
     const restantes = processo.tarefas
       .filter((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo === 'contato')
       .sort((a, b) => a.data.localeCompare(b.data));
-    let dia = adicionarDiasUteis(diaReal, etapa.intervaloDiasUteis, feriados);
+    let dia = proximoAviso(diaReal, etapa.intervaloDiasUteis, feriados);
     let ultimo = diaReal;
     for (const t of restantes) {
       t.data = dia;
       ultimo = dia;
-      dia = adicionarDiasUteis(dia, etapa.intervaloDiasUteis, feriados);
+      dia = proximoAviso(dia, etapa.intervaloDiasUteis, feriados);
     }
     const pergunta = processo.tarefas.find((t) => t.etapa === etapa.id && t.status === 'pendente' && t.tipo === 'decisao' && !t.promessa);
     if (pergunta) pergunta.data = adicionarDiasUteis(ultimo, etapa.decisao.diasUteisAposUltimoContato || 0, feriados);
@@ -236,7 +236,8 @@ function posicionar(processo, { etapaId, contatosFeitos = 0, dataReferencia, por
     if (!Number.isInteger(feitos) || feitos < 0 || feitos > etapa.tentativas) throw new Error(`Avisos já enviados: de 0 a ${etapa.tentativas}.`);
     if (feitos > 0) {
       if (!dataReferencia) throw new Error('Informe a data do último aviso enviado.');
-      base = subtrairDiasUteis(dataReferencia, (feitos - 1) * etapa.intervaloDiasUteis, feriados);
+      base = dataReferencia;
+      for (let i = 1; i < feitos; i++) base = avisoAnterior(base, etapa.intervaloDiasUteis, feriados);
     }
   } else if (etapa.tipo === 'aguardo') {
     if (!dataReferencia) throw new Error('Informe a data em que a espera começou (ex.: dia da negativação).');
@@ -266,6 +267,85 @@ function posicionar(processo, { etapaId, contatosFeitos = 0, dataReferencia, por
   return processo;
 }
 
+// Regra nova (23/11): o dia de folga entre avisos pode ser fim de semana ou feriado. Os processos que já
+// estavam em andamento tinham os próximos avisos calculados pela regra antiga (sempre pulando um dia útil).
+// Aqui eles são refeitos pela regra nova, a partir do último aviso enviado. Só mexe no aviso que bate com a
+// regra antiga (não mexe em datas ajustadas à mão nem em avisos retomados depois de promessa) e nunca joga
+// um aviso para antes de hoje. Pode rodar várias vezes: depois de ajustado, não muda mais.
+function realinharAvisos(processo, cronograma, hoje) {
+  if (processo.status !== 'ativo' || !processo.etapaAtual) return false;
+  const etapa = obterEtapa(cronograma, processo.etapaAtual);
+  if (etapa.tipo !== 'contatos') return false;
+  const feriados = cronograma.feriados || [];
+  const intervalo = etapa.intervaloDiasUteis;
+  const daEtapa = processo.tarefas.filter((t) => t.etapa === etapa.id);
+  if (daEtapa.some((t) => t.tipo === 'decisao' && t.promessa)) return false;
+
+  const diaDoEnvio = (t) => (t.retorno && t.retorno.enviadoEm ? new Date(t.retorno.enviadoEm).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : null);
+  const enviados = daEtapa.filter((t) => t.tipo === 'contato' && (t.status === 'concluida' || (t.status === 'pendente' && diaDoEnvio(t))));
+  const pendentes = daEtapa.filter((t) => t.tipo === 'contato' && t.status === 'pendente' && !diaDoEnvio(t)).sort((a, b) => a.data.localeCompare(b.data));
+  if (!pendentes.length) return false;
+
+  // Ponto de partida: o último aviso enviado (dia marcado ou dia real do "Enviei", o que for depois).
+  let fila = pendentes;
+  let anteriores;
+  if (enviados.length) {
+    const ultimo = [...enviados].sort((a, b) => a.data.localeCompare(b.data)).pop();
+    const real = diaDoEnvio(ultimo);
+    anteriores = [...new Set([real && real > ultimo.data ? real : ultimo.data, ultimo.data])];
+  } else {
+    anteriores = [pendentes[0].data];
+    fila = pendentes.slice(1);
+  }
+  const ancoraAntiga = anteriores.find((d) => fila.length && fila[0].data === adicionarDiasUteis(d, intervalo, feriados));
+  if (!ancoraAntiga) return false;
+
+  const minimo = proximoDiaUtil(hoje, feriados);
+  let antigo = ancoraAntiga;
+  let novo = ancoraAntiga;
+  let mudou = false;
+  let ultimoContato = null;
+  for (const t of fila) {
+    if (t.data !== adicionarDiasUteis(antigo, intervalo, feriados)) break;
+    let data = proximoAviso(novo, intervalo, feriados);
+    if (data < minimo && t.data >= minimo) data = minimo;
+    antigo = t.data;
+    novo = data;
+    ultimoContato = data;
+    if (data !== t.data) { t.data = data; mudou = true; }
+  }
+  if (!mudou) return false;
+  const todos = daEtapa.filter((t) => t.tipo === 'contato' && t.status === 'pendente').map((t) => t.data).sort();
+  const pergunta = daEtapa.find((t) => t.tipo === 'decisao' && t.status === 'pendente');
+  if (pergunta && ultimoContato) pergunta.data = adicionarDiasUteis(todos[todos.length - 1], etapa.decisao.diasUteisAposUltimoContato || 0, feriados);
+  return true;
+}
+
+// Garante a folga entre avisos depois que algum aviso foi empurrado (ex.: feriado novo vindo do SGP):
+// se dois avisos ficaram colados ou no mesmo dia, o de depois vai para o próximo dia de aviso.
+function espacarAvisos(processo, cronograma) {
+  if (processo.status !== 'ativo' || !processo.etapaAtual) return false;
+  const etapa = obterEtapa(cronograma, processo.etapaAtual);
+  if (etapa.tipo !== 'contatos') return false;
+  const feriados = cronograma.feriados || [];
+  const contatos = processo.tarefas.filter((t) => t.etapa === etapa.id && t.tipo === 'contato' && t.status !== 'cancelada').sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
+  let mudou = false;
+  for (let i = 1; i < contatos.length; i++) {
+    const t = contatos[i];
+    if (t.status !== 'pendente' || (t.retorno && t.retorno.enviadoEm)) continue;
+    const minimo = proximoAviso(contatos[i - 1].data, etapa.intervaloDiasUteis, feriados);
+    if (t.data < minimo) { t.data = minimo; mudou = true; }
+  }
+  if (!mudou) return false;
+  const ultimo = contatos[contatos.length - 1].data;
+  const pergunta = processo.tarefas.find((t) => t.etapa === etapa.id && t.tipo === 'decisao' && t.status === 'pendente' && !t.promessa);
+  if (pergunta) {
+    const data = adicionarDiasUteis(ultimo, etapa.decisao.diasUteisAposUltimoContato || 0, feriados);
+    if (pergunta.data < data) pergunta.data = data;
+  }
+  return true;
+}
+
 // Tarefas pendentes até a data informada, agrupadas por cliente
 // (as de dias anteriores aparecem como atrasadas).
 function agendaDoDia(processos, hoje) {
@@ -286,4 +366,4 @@ function agendaDoDia(processos, hoje) {
   );
 }
 
-module.exports = { criarProcesso, iniciarEtapa, concluirTarefa, posicionar, registrarPromessa, agendaDoDia, obterEtapa, obterFluxo };
+module.exports = { realinharAvisos, espacarAvisos, criarProcesso, iniciarEtapa, concluirTarefa, posicionar, registrarPromessa, agendaDoDia, obterEtapa, obterFluxo };

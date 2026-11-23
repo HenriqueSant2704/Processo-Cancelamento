@@ -1,6 +1,6 @@
 // Monta os dados já "mastigados" para a tela: o que fazer hoje, atrasados,
 // decisões pendentes, próximos dias e o resumo de cada cliente.
-const { diasEntre, adicionarDiasUteis, proximoDiaUtil, ehDiaUtil } = require('../utils/datas');
+const { diasEntre, adicionarDiasUteis, proximoDiaUtil, ehDiaUtil, proximoAviso } = require('../utils/datas');
 const { obterEtapa, obterFluxo } = require('../cronograma/motor');
 const { bloqueada, vistoPor, NOMES: NOMES_AUTORIZACAO } = require('../processos/autorizacao');
 const { adicionarDias } = require('../utils/datas');
@@ -183,7 +183,7 @@ function detalheProcesso(processo, hoje, cronograma) {
       for (const [i, t] of pend.entries()) {
         if (i > 0) projetadas.set(t.id, dia);
         ultimo = dia;
-        dia = adicionarDiasUteis(dia, etapaAtual.intervaloDiasUteis, feriados);
+        dia = proximoAviso(dia, etapaAtual.intervaloDiasUteis, feriados);
       }
       const pergunta = processo.tarefas.find((t) => t.etapa === etapaAtual.id && t.status === 'pendente' && t.tipo === 'decisao' && !t.promessa);
       if (pergunta) projetadas.set(pergunta.id, adicionarDiasUteis(ultimo, (etapaAtual.decisao && etapaAtual.decisao.diasUteisAposUltimoContato) || 0, feriados));

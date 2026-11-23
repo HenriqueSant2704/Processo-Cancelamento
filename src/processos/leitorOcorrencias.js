@@ -127,7 +127,7 @@ function sugerir(processo, ocorrencias, cronograma) {
     // "abrir a ocorrência de notificação" (regra do Miguel, 19/11). Só nas fases antes do cancelamento.
     const inicio = (cronograma.fluxos || []).find((f) => f.id === 'principal')?.inicio || cronograma.inicio;
     const etapa = cronograma.etapas.find((e) => e.id === processo.etapaAtual);
-    const antesDoCancelamento = ['Notificação', 'Negativação', 'Negativado', 'Aviso de cancelamento'].includes(etapa && etapa.fase);
+    const antesDoCancelamento = ['Notificação de negativação', 'Negativado', 'Aviso de cancelamento'].includes(etapa && etapa.fase);
     // Depois de um recomeço, só conta o que foi feito DEPOIS dele (senão recomeçaria todo dia).
     const recomeco = [...(processo.historico || [])].reverse().find((h) => h.evento === 'etapa-ajustada' && /Recomeço/.test(h.detalhes || ''));
     const andou = processo.etapaAtual !== inicio || processo.tarefas.some((t) => t.etapa === inicio && t.status === 'concluida' && (!recomeco || (t.concluidaEm || '') > recomeco.data));

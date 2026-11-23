@@ -143,7 +143,7 @@ async function reajustarAgenda({ repositorio, cronograma, hoje }) {
 // ex.: pagou ou fez promessa antes de abrir a ocorrência, ou o contrato foi encerrado. Se for suspenso de novo,
 // a sincronização abre um processo novo. Com ocorrência aberta (ex.: promessa feita no meio da notificação), fica.
 // Só vale para as fases antes do cancelamento (depois dele o contrato fica cancelado mesmo).
-const FASES_COM_SUSPENSAO = ['Notificação', 'Negativação', 'Negativado', 'Aviso de cancelamento'];
+const FASES_COM_SUSPENSAO = ['Notificação de negativação', 'Negativado', 'Aviso de cancelamento'];
 async function retirarQuemSaiu({ repositorio, cronograma, hoje, suspensos, abertas }) {
   const { obterEtapa } = require('../cronograma/motor');
   const { registrar } = require('../auditoria/historico');

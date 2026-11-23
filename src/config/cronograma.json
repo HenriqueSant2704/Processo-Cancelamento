@@ -21,8 +21,7 @@
   },
   "inicio": "notificacao-negativacao",
   "fases": [
-    "Notificação",
-    "Negativação",
+    "Notificação de negativação",
     "Negativado",
     "Aviso de cancelamento",
     "Cancelamento",
@@ -33,7 +32,7 @@
     {
       "id": "notificacao-negativacao",
       "nome": "Notificação de negativação",
-      "fase": "Notificação",
+      "fase": "Notificação de negativação",
       "tipo": "contatos",
       "acoes": [
         "Abrir ocorrência de negativação no SGP"
@@ -65,8 +64,8 @@
     },
     {
       "id": "negativacao",
-      "nome": "Negativação",
-      "fase": "Negativação",
+      "nome": "Negativar e avisar o cliente",
+      "fase": "Negativado",
       "tipo": "acao",
       "acoes": [
         "Negativar o cliente",
@@ -241,8 +240,7 @@
       "nome": "Inadimplência (suspensos)",
       "inicio": "notificacao-negativacao",
       "fases": [
-        "Notificação",
-        "Negativação",
+        "Notificação de negativação",
         "Negativado",
         "Aviso de cancelamento",
         "Cancelamento",

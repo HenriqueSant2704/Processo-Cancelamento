@@ -171,7 +171,7 @@ test('fim de etapa e início da próxima: só marca quem a pessoa escolheu', asy
   assert.match(comentarios[0].texto, /não regularizou/);
   assert.match(comentarios[0].texto, /Posso dar continuidade\?/);
   assert.deepStrictEqual(comentarios[1].marcar, []);
-  assert.match(comentarios[1].texto, /Nova etapa: Negativação/);
+  assert.match(comentarios[1].texto, /Nova etapa: Negativar e avisar o cliente/);
   assert.match(comentarios[1].texto, /Negativar o cliente/);
 });
 

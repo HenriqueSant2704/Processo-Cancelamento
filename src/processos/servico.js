@@ -109,19 +109,21 @@ function atualizarFeriados(cronograma, datas) {
 
 // Reajusta a agenda dos processos ativos:
 //  - tarefa pendente marcada para sábado, domingo ou feriado vai para o próximo dia útil;
-//  - pergunta de etapa de espera (ex.: 10 dias depois da negativação) é recalculada se o prazo mudou.
+//  - pergunta de etapa de espera (ex.: 10 dias depois da negativação) é recalculada se o prazo mudou;
+//  - avisos calculados pela regra antiga de dias alternados são refeitos pela regra nova (realinharAvisos).
 async function reajustarAgenda({ repositorio, cronograma, hoje }) {
-  const { obterEtapa } = require('../cronograma/motor');
+  const { obterEtapa, realinharAvisos, espacarAvisos } = require('../cronograma/motor');
   const { proximoDiaUtil, adicionarDias, ehDiaUtil } = require('../utils/datas');
   const feriados = cronograma.feriados || [];
   let ajustadas = 0;
   for (const resumo of await repositorio.listar()) {
     if (resumo.status !== 'ativo') continue;
-    const precisa = resumo.tarefas.some((t) => t.status === 'pendente' && (t.tipo === 'decisao' || (t.data >= hoje && !ehDiaUtil(t.data, feriados))));
+    const precisa = resumo.tarefas.some((t) => t.status === 'pendente' && (t.tipo === 'decisao' || t.tipo === 'contato' || (t.data >= hoje && !ehDiaUtil(t.data, feriados))));
     if (!precisa) continue;
     const processo = await repositorio.obter(resumo.id);
     if (!processo) continue;
-    let mudou = false;
+    let mudou = realinharAvisos(processo, cronograma, hoje);
+    if (mudou) ajustadas++;
     for (const t of processo.tarefas) {
       if (t.status !== 'pendente') continue;
       let nova = t.data;
@@ -134,6 +136,7 @@ async function reajustarAgenda({ repositorio, cronograma, hoje }) {
       }
       if (nova !== t.data) { t.data = nova; mudou = true; ajustadas++; }
     }
+    if (espacarAvisos(processo, cronograma)) mudou = true;
     if (mudou) await repositorio.salvarProcesso(processo);
   }
   return ajustadas;

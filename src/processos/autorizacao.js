@@ -9,7 +9,7 @@
 //   respondido  -> não deu para entender sozinho; a Jéssica confirma (autorizado ou negado)
 // A Jéssica é avisada no sino da tela (autorizacao.visto = false).
 const { registrar } = require('../auditoria/historico');
-const { adicionarDiasUteis, proximoDiaUtil, ehDiaUtil } = require('../utils/datas');
+const { adicionarDiasUteis, proximoDiaUtil, ehDiaUtil, proximoAviso } = require('../utils/datas');
 
 const BLOQUEIA = new Set(['aguardando', 'negado', 'respondido']);
 const NOMES = { aguardando: 'Aguardando autorização', negado: 'Autorização negada', respondido: 'Lucas respondeu', autorizado: 'Autorizado' };
@@ -47,6 +47,17 @@ function remarcarEtapa(processo, etapaId, inicio, feriados = []) {
   for (const t of pendentes) {
     const desloc = t.data > primeira ? diasUteisEntre(primeira, t.data, feriados) : 0;
     t.data = desloc ? adicionarDiasUteis(comeco, desloc, feriados) : comeco;
+  }
+  // Avisos: entre um e outro precisa ter um dia de folga (pode ser fim de semana ou feriado) e a
+  // pergunta "regularizou?" fica para o dia útil seguinte ao último aviso.
+  let anterior = null;
+  for (const t of pendentes) {
+    if (t.tipo === 'contato') {
+      if (anterior && t.data < proximoAviso(anterior, 2, feriados)) t.data = proximoAviso(anterior, 2, feriados);
+      anterior = t.data;
+    } else if (t.tipo === 'decisao' && anterior && t.data <= anterior) {
+      t.data = adicionarDiasUteis(anterior, 1, feriados);
+    }
   }
 }
 

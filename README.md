@@ -14,14 +14,14 @@ o cliente quando a fatura passa de 15 dias vencida.
 ```
 Bloqueado há 1 dia
   └─ Notificação de negativação
-       abrir ocorrência no SGP + 3 contatos em dias úteis alternados (ex.: seg, qua, sex)
+       abrir ocorrência no SGP + 3 contatos dia sim, dia não (o dia de folga pode ser fim de semana ou feriado: seg, qua, sex; qui -> seg)
        └─ Regularizou?
             ├─ sim → liberar o serviço, encerrar a ocorrência  (FIM: regularizado)
             └─ não → negativar + notificar a negativação
                       └─ aguardar 15 dias → Regularizou?
                            ├─ sim → retirar negativação, desbloquear, encerrar  (FIM: regularizado)
                            └─ não → aviso de cancelamento
-                                    abrir ocorrência + 2 contatos em dias úteis alternados
+                                    abrir ocorrência + 2 contatos dia sim, dia não
                                     → no dia útil seguinte: Regularizou?
                                       ├─ sim → retirar negativação, desbloquear  (FIM: regularizado)
                                       └─ não → cancelar contrato, notificar, multa se houver
@@ -157,7 +157,7 @@ npm run cli -- sgp-diagnostico
 
 **Negativação pós-cancelamento:** além dos suspensos, o sistema lê as ocorrências **abertas** do tipo
 "Financeiro - Negativação pós Cancelamento" (rota URA `Ocorrência – Listar`) e abre um processo do fluxo
-`pos-cancelamento` para cada contrato: 3 notificações em dias úteis alternados, "regularizou?" e o encerramento
+`pos-cancelamento` para cada contrato: 3 notificações dia sim, dia não, "regularizou?" e o encerramento
 da ocorrência. O tipo é encontrado pelo nome (rota `GET /api/os/ocorrencia/tipo/list/`).
 
 **Criar ocorrência pelo sistema:** as tarefas "Abrir ocorrência de negativação/cancelamento no SGP" ganham o

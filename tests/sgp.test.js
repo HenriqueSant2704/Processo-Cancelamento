@@ -283,11 +283,11 @@ test('feriado do SGP: avisos marcados no feriado vão para o próximo dia útil'
   const cronograma = JSON.parse(JSON.stringify(carregarCronograma()));
   const repositorio = new RepositorioJson(null);
   const p = criarProcesso({ id: '1', cliente: { id: '1', nome: 'A', contrato: '1' }, bloqueadoEm: '2026-11-15', inicio: '2026-11-18', cronograma });
-  await repositorio.salvarProcesso(p); // avisos 18 (qua), 20 (sex), 24 (ter)
+  await repositorio.salvarProcesso(p); // avisos 18 (qua), 20 (sex), 23 (seg)
   atualizarFeriados(cronograma, ['2026-11-20']); // Consciência Negra
   assert.strictEqual(await reajustarAgenda({ repositorio, cronograma, hoje: '2026-11-18' }), 1);
   const datasContato = (await repositorio.obter('1')).tarefas.filter((t) => t.tipo === 'contato').map((t) => t.data);
-  assert.deepStrictEqual(datasContato, ['2026-11-18', '2026-11-23', '2026-11-24']);
+  assert.deepStrictEqual(datasContato, ['2026-11-18', '2026-11-23', '2026-11-25']); // o 3º não pode colar no 2º
 });
 
 test('ficha do cliente: contatos, plano e frequência de atraso, sem dados sensíveis do serviço', () => {
